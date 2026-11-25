@@ -51,7 +51,7 @@ export function TeamPanel({ workspace, account }: { workspace: Workspace; accoun
     return () => controller.abort();
   }, [path, owner, memberPage, invitePage, reload]);
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<void>, refreshLists = true) {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -59,7 +59,7 @@ export function TeamPanel({ workspace, account }: { workspace: Workspace; accoun
     try {
       await action();
       setConfirm(undefined);
-      setReload(value => value + 1);
+      if (refreshLists) setReload(value => value + 1);
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 401) window.location.replace("/sign-in");
       else {
@@ -114,7 +114,7 @@ export function TeamPanel({ workspace, account }: { workspace: Workspace; accoun
         await api(path + "/members/" + action.member.userId, { method: "DELETE" });
         setNotice("Teammate removed.");
       }
-    });
+    }, action.kind !== "transfer" && action.kind !== "leave");
   }
 
   return <>

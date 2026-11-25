@@ -71,10 +71,16 @@ test("Owner invites a Reviewer and a Member, removes access, and transfers owner
     await jules.reload();
     await expect(jules.getByRole("heading", { name: "Workspace unavailable" })).toBeVisible();
 
+    // Leave the old page alive while ownership has changed on the server.
+    await page.route("**" + teamPath, async route => {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await route.continue();
+    });
     await roster.getByRole("listitem").filter({ hasText: "Mara" }).getByRole("button", { name: "Transfer ownership" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Confirm transfer" }).click();
     await expect(page.getByRole("heading", { name: "Invite a teammate" })).toHaveCount(0);
     await expect(roster.getByRole("listitem").filter({ hasText: "Ari" })).toContainText("member");
+    expect(new URL(page.url()).pathname).toBe(teamPath);
     await mara.reload();
     await expect(mara.getByRole("heading", { name: "Invite a teammate" })).toBeVisible();
     await expect(mara.getByRole("region", { name: "Members" }).getByText("owner · You")).toBeVisible();
