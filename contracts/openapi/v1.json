@@ -1,0 +1,5284 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Triage Desk API",
+    "version": "1.0.0-draft.1",
+    "description": "Stage 6 design for review. Paths are relative to the same-origin /api/v1 adapter. The ASP.NET Core service owns validation, authorization and writes. Examples use fictional records. Role claims and assignee identity always come from the server."
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Same-origin browser entry point"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Account"
+    },
+    {
+      "name": "Workspace"
+    },
+    {
+      "name": "Repositories"
+    },
+    {
+      "name": "Refresh"
+    },
+    {
+      "name": "Issues"
+    },
+    {
+      "name": "Activity"
+    },
+    {
+      "name": "Reports"
+    }
+  ],
+  "security": [
+    {
+      "session": []
+    }
+  ],
+  "paths": {
+    "/auth/csrf": {
+      "get": {
+        "operationId": "getCsrf",
+        "summary": "Get a request token",
+        "tags": [
+          "Account"
+        ],
+        "description": "Bootstrap the cookie/token pair before unsafe requests. After login or logout fetch a fresh token bound to the new identity.",
+        "x-access": "Public",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Relay each server-issued Set-Cookie as a separate header. Cookie authentication uses Secure, HttpOnly and host-only cookies."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Csrf"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Register an account",
+        "tags": [
+          "Account"
+        ],
+        "description": "Generic response for a valid submission. Verification instructions go to the account email. Password must meet the configured length policy.",
+        "x-access": "Public",
+        "security": [
+          {
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Register"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/email-verification/requests": {
+      "post": {
+        "operationId": "requestVerification",
+        "summary": "Request another verification email",
+        "tags": [
+          "Account"
+        ],
+        "description": "Generic acknowledgement for eligible and unknown addresses. Throttle by recipient and requester.",
+        "x-access": "Public",
+        "security": [
+          {
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/email-verification": {
+      "post": {
+        "operationId": "confirmEmail",
+        "summary": "Confirm email ownership",
+        "tags": [
+          "Account"
+        ],
+        "description": "Consume the token for this account. An already-confirmed retry is safe with valid proof.",
+        "x-access": "Public",
+        "security": [
+          {
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "410": {
+            "$ref": "#/components/responses/Status410"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEmail"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Open a browser session",
+        "tags": [
+          "Account"
+        ],
+        "description": "Authenticate via Identity. Success sets the session cookie. Fetch a fresh antiforgery token next. An unverified email cannot accept a workspace invitation.",
+        "x-access": "Public",
+        "security": [
+          {
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Relay each server-issued Set-Cookie as a separate header. Cookie authentication uses Secure, HttpOnly and host-only cookies."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "End the browser session",
+        "tags": [
+          "Account"
+        ],
+        "description": "Expire the cookie and clear workspace data in the client. Fetch a new anonymous antiforgery pair before signing in again.",
+        "x-access": "Signed-in account",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Relay each server-issued Set-Cookie as a separate header. Cookie authentication uses Secure, HttpOnly and host-only cookies."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Read current account",
+        "tags": [
+          "Account"
+        ],
+        "description": "Returns only the signed-in user’s account.",
+        "x-access": "Signed-in account",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        }
+      }
+    },
+    "/me/preferences": {
+      "patch": {
+        "operationId": "setPreferences",
+        "summary": "Set personal appearance",
+        "tags": [
+          "Account"
+        ],
+        "description": "Persist System, Light or Dark for the current account.",
+        "x-access": "Signed-in account",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Preferences"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces": {
+      "get": {
+        "operationId": "listWorkspaces",
+        "summary": "List my workspaces",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Only workspaces with an active membership.",
+        "x-access": "Signed-in account",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createWorkspace",
+        "summary": "Create a workspace",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Create workspace and owner membership together. Names need not be globally unique. On ambiguous create failure, refetch the workspace list before retrying.",
+        "x-access": "Signed-in account",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspace"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}": {
+      "get": {
+        "operationId": "getWorkspace",
+        "summary": "Read workspace",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Includes the caller’s effective role.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/members": {
+      "get": {
+        "operationId": "listMembers",
+        "summary": "List active members",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Names and roles support member selection. No email directory.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/members/{userId}": {
+      "patch": {
+        "operationId": "changeRole",
+        "summary": "Change a member role",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Set a base role for a current non-owner. Use ownership transfer to change the owner.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/userId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRole"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeMember",
+        "summary": "Remove a teammate",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Retire membership and return unfinished assignments to review atomically. Completed history remains attributable. Transfer ownership first for the current Owner.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/userId"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/membership": {
+      "delete": {
+        "operationId": "leaveWorkspace",
+        "summary": "Leave the workspace",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "An Owner must transfer ownership first. Apply the same reassignment rules as removal.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/ownership": {
+      "put": {
+        "operationId": "transferOwner",
+        "summary": "Transfer workspace ownership",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Require an active recipient. Serialize with competing ownership or removal changes. The previous owner resumes their stored base role.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwner"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/invitations": {
+      "get": {
+        "operationId": "listInvites",
+        "summary": "List workspace invitations",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Return retained invitations, excluding tokens and digests.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "invite",
+        "summary": "Invite a teammate",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "One pending invitation per normalized email and workspace. Return the private acceptance link only at creation. Revoke and reissue if lost.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewInvitation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Invite"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/invitations/{invitationId}": {
+      "delete": {
+        "operationId": "revokeInvite",
+        "summary": "Revoke a pending invitation",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Revoke a pending invitation. Repeated revocation of the same visible invitation is a no-op.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/invitationId"
+          }
+        ]
+      }
+    },
+    "/invitations/accept": {
+      "post": {
+        "operationId": "acceptInvite",
+        "summary": "Join using an invitation",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Require the signed-in account’s verified email to match. Unrecognized or wrong-recipient tokens get a neutral 404. Retry by the same recipient may return the existing active membership. No token in query strings.",
+        "x-access": "Signed-in account",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "410": {
+            "$ref": "#/components/responses/Status410"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitation"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/preview": {
+      "post": {
+        "operationId": "previewInvite",
+        "summary": "Read the invited team and role",
+        "tags": [
+          "Workspace"
+        ],
+        "description": "Read a private invitation before accepting. Require the signed-in account's verified email to match. The token is submitted in the body. A missing or wrong-recipient token gets a neutral 404. This read does not consume the invitation.",
+        "x-access": "Signed-in account",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "410": {
+            "$ref": "#/components/responses/Status410"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitation"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/repository-previews": {
+      "post": {
+        "operationId": "previewRepository",
+        "summary": "Preview a public repository",
+        "tags": [
+          "Repositories"
+        ],
+        "description": "Read public metadata from the fixed GitHub API host. Accept an owner/repository slug. An inaccessible repository yields a neutral 404.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "502": {
+            "$ref": "#/components/responses/Status502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/repositories": {
+      "get": {
+        "operationId": "listRepositories",
+        "summary": "List repository connections",
+        "tags": [
+          "Repositories"
+        ],
+        "description": "Default connected. Owners may also list disconnected or all connections. Ordered by full name then local ID.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          },
+          {
+            "name": "connection",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "connected",
+                "disconnected",
+                "all"
+              ],
+              "default": "connected"
+            },
+            "description": "Owner required for disconnected or all."
+          }
+        ]
+      },
+      "post": {
+        "operationId": "connectRepository",
+        "summary": "Connect or reconnect a repository",
+        "tags": [
+          "Repositories"
+        ],
+        "description": "Recheck public visibility. Use the stable GitHub repository ID. A repeated connect returns the existing connection. Reconnection verifies public source visibility before restoring imported text. Start the initial import separately.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Repository"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Repository"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "502": {
+            "$ref": "#/components/responses/Status502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositoryInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/repositories/{repositoryId}": {
+      "get": {
+        "operationId": "getRepository",
+        "summary": "Read connection and freshness",
+        "tags": [
+          "Repositories"
+        ],
+        "description": "Show last successful refresh and any open run ID. Disconnected connection metadata is owner-only.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Repository"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/repositoryId"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "disconnectRepository",
+        "summary": "Disconnect a repository",
+        "tags": [
+          "Repositories"
+        ],
+        "description": "Retain decisions, cancel an open run and remove issues from active views atomically. A repeated request for the same retained connection succeeds.",
+        "x-access": "Workspace Owner",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/repositoryId"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/repositories/{repositoryId}/sync-runs": {
+      "post": {
+        "operationId": "startRun",
+        "summary": "Start a manual refresh",
+        "tags": [
+          "Refresh"
+        ],
+        "description": "Client creates a runId once per intended refresh. Return 201 for a new run or 200 for the same ID and connection, including its retained terminal state. Another open run returns 409/open_run_exists and its runId. A run ID reused for a different connection conflicts. Start records the cutoff and mode; advance performs the bounded reads.",
+        "x-access": "Owner or Reviewer",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                },
+                "examples": {
+                  "started": {
+                    "value": {
+                      "runId": "10000000-0000-4000-8000-000000000007",
+                      "repositoryId": "10000000-0000-4000-8000-000000000002",
+                      "mode": "initial",
+                      "state": "running",
+                      "checkpoint": 0,
+                      "examined": 0,
+                      "imported": 0,
+                      "updated": 0,
+                      "lastErrorCode": null,
+                      "retryAt": null,
+                      "startedAt": "2026-11-25T01:55:00Z",
+                      "endedAt": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/repositoryId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRun"
+              },
+              "examples": {
+                "beginRefresh": {
+                  "value": {
+                    "runId": "10000000-0000-4000-8000-000000000007"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/repositories/{repositoryId}/sync-runs/{runId}": {
+      "get": {
+        "operationId": "getRun",
+        "summary": "Read saved refresh progress",
+        "tags": [
+          "Refresh"
+        ],
+        "description": "Reads progress from PostgreSQL without a GitHub request. Retained run metadata for a disconnected repository is owner-only.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/repositoryId"
+          },
+          {
+            "$ref": "#/components/parameters/runId"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/repositories/{repositoryId}/sync-runs/{runId}/advance": {
+      "post": {
+        "operationId": "advanceRun",
+        "summary": "Advance one saved batch",
+        "tags": [
+          "Refresh"
+        ],
+        "description": "One bounded batch. A checkpoint behind the stored value, or a terminal run, returns its current representation without a second import. A future checkpoint conflicts. A live lease returns 409/run_busy. A paused run can advance after retryAt. The API rechecks current authorization, connection and lease before commit. On retryable upstream failure preserve progress; on quota return 429 and when known Retry-After and retryAt.",
+        "x-access": "Owner or Reviewer",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                },
+                "examples": {
+                  "firstBatchCommitted": {
+                    "value": {
+                      "runId": "10000000-0000-4000-8000-000000000007",
+                      "repositoryId": "10000000-0000-4000-8000-000000000002",
+                      "mode": "initial",
+                      "state": "running",
+                      "checkpoint": 1,
+                      "examined": 100,
+                      "imported": 86,
+                      "updated": 0,
+                      "lastErrorCode": null,
+                      "retryAt": null,
+                      "startedAt": "2026-11-25T01:55:00Z",
+                      "endedAt": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Status429"
+          },
+          "502": {
+            "$ref": "#/components/responses/Status502"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/repositoryId"
+          },
+          {
+            "$ref": "#/components/parameters/runId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdvanceRun"
+              },
+              "examples": {
+                "resumeAtSavedPosition": {
+                  "value": {
+                    "expectedCheckpoint": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/repositories/{repositoryId}/sync-runs/{runId}/pause": {
+      "post": {
+        "operationId": "pauseRun",
+        "summary": "Pause at a batch boundary",
+        "tags": [
+          "Refresh"
+        ],
+        "description": "Pause explicit continuation. A live batch yields 409/run_busy. A stale checkpoint returns the current run. Closing the tab simply stops advance requests; a final in-flight batch may finish. Read the saved checkpoint on return.",
+        "x-access": "Owner or Reviewer",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/repositoryId"
+          },
+          {
+            "$ref": "#/components/parameters/runId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdvanceRun"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/issues": {
+      "get": {
+        "operationId": "listIssues",
+        "summary": "Search and filter issues",
+        "tags": [
+          "Issues"
+        ],
+        "description": "Combine view and supplied filters with AND. Exclude disconnected or unavailable sources from lists and counts. Apply the same predicate to items and total. Page results may move between separate reads as teammates work. Unsupported query keys, repeated scalar keys or invalid values return 400.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueSummaryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "needsReview",
+                "available",
+                "myWork",
+                "activeWork",
+                "sourceChanges"
+              ],
+              "default": "all"
+            },
+            "description": "all includes Done and Set aside; needsReview is the inbox; available = Ready with no assignee; myWork = caller's active assignments; activeWork = Ready, In progress or Waiting for information; sourceChanges = outstanding source-review flags."
+          },
+          {
+            "name": "repositoryId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Local repository in this workspace."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "needsReview",
+                "ready",
+                "waitingForInformation",
+                "inProgress",
+                "done",
+                "setAside"
+              ]
+            },
+            "description": "Exact workspace workflow status."
+          },
+          {
+            "name": "githubState",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "closed"
+              ]
+            },
+            "description": "Exact state from the latest available source snapshot."
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "high",
+                "normal",
+                "low"
+              ]
+            },
+            "description": "Exact internal priority."
+          },
+          {
+            "name": "assigneeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "const": "unassigned"
+                }
+              ]
+            },
+            "description": "Local user UUID or the literal unassigned."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160,
+              "pattern": "\\S"
+            },
+            "description": "Trimmed title substring (case-insensitive) or repository-qualified issue number, e.g. cli #42 or northline/cli #42. A short name can match multiple connected repositories."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "enteredReviewAt",
+                "priority",
+                "updatedAt",
+                "number"
+              ]
+            },
+            "description": "Primary sort. enteredReviewAt for inbox, priority for available, otherwise updatedAt (workspace triage). Nulls always last; local issue ID ascending breaks ties."
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "description": "Defaults to ascending for enteredReviewAt, priority (high first) and number, descending for updatedAt."
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/issues/{issueId}": {
+      "get": {
+        "operationId": "getIssue",
+        "summary": "Read one issue and its workspace decision",
+        "tags": [
+          "Issues"
+        ],
+        "description": "Available sources return sanitized-for-display data as plain strings; the UI renders safely. For a known unavailable or disconnected source return a neutral source:null placeholder and permitted private triage. Cross-workspace IDs return 404.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                },
+                "examples": {
+                  "reviewerSeesDoneAndOpen": {
+                    "value": {
+                      "workspaceId": "10000000-0000-4000-8000-000000000001",
+                      "repositoryId": "10000000-0000-4000-8000-000000000002",
+                      "issueId": "10000000-0000-4000-8000-000000000042",
+                      "sourceAvailability": "available",
+                      "source": {
+                        "githubIssueId": "910002042",
+                        "number": 42,
+                        "title": "CLI crashes on Windows",
+                        "state": "open",
+                        "labels": [
+                          "bug"
+                        ],
+                        "url": "https://github.com/northline/cli/issues/42",
+                        "sourceUpdatedAt": "2026-11-24T15:08:00Z",
+                        "observedAt": "2026-11-25T02:00:00Z",
+                        "body": "The CLI exits when it encounters a path containing spaces.",
+                        "sourceCreatedAt": "2026-11-23T08:00:00Z"
+                      },
+                      "triage": {
+                        "status": "done",
+                        "priority": "high",
+                        "severity": "major",
+                        "assigneeId": "10000000-0000-4000-8000-000000000004",
+                        "nextStep": "Reproduce the crash on Windows.",
+                        "question": null,
+                        "deferralReason": null,
+                        "sourceReviewFlag": null,
+                        "enteredReviewAt": null,
+                        "updatedAt": "2026-11-25T03:10:00Z",
+                        "decisionVersion": 10
+                      }
+                    }
+                  },
+                  "sourceUnavailable": {
+                    "value": {
+                      "workspaceId": "10000000-0000-4000-8000-000000000001",
+                      "repositoryId": "10000000-0000-4000-8000-000000000002",
+                      "issueId": "10000000-0000-4000-8000-000000000042",
+                      "sourceAvailability": "unavailable",
+                      "source": null,
+                      "triage": {
+                        "status": "done",
+                        "priority": "high",
+                        "severity": "major",
+                        "assigneeId": "10000000-0000-4000-8000-000000000004",
+                        "nextStep": "Reproduce the crash on Windows.",
+                        "question": null,
+                        "deferralReason": null,
+                        "sourceReviewFlag": null,
+                        "enteredReviewAt": null,
+                        "updatedAt": "2026-11-25T03:10:00Z",
+                        "decisionVersion": 10
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/issueId"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/issues/{issueId}/claim": {
+      "post": {
+        "operationId": "claimIssue",
+        "summary": "Claim available work for myself",
+        "tags": [
+          "Issues"
+        ],
+        "description": "Require an active member, a connected visible source, Ready and no assignee. Bind the assignee from the authenticated session. First success returns the new triage, still Ready. A retry by the winner returns current triage without a second activity. A competing claim returns 409/already_claimed with currentTriage. Version mismatch on other changes returns stale_decision.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Triage"
+                },
+                "examples": {
+                  "julesClaims": {
+                    "value": {
+                      "status": "ready",
+                      "priority": "high",
+                      "severity": "major",
+                      "assigneeId": "10000000-0000-4000-8000-000000000004",
+                      "nextStep": "Reproduce the crash on Windows.",
+                      "question": null,
+                      "deferralReason": null,
+                      "sourceReviewFlag": null,
+                      "enteredReviewAt": null,
+                      "updatedAt": "2026-11-25T02:15:00Z",
+                      "decisionVersion": 8
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "description": "Current authorized triage for a claim conflict.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "examples": {
+                  "ivoSeesJules": {
+                    "value": {
+                      "type": "urn:triagedesk:problem:already_claimed",
+                      "title": "This issue has already been claimed",
+                      "status": 409,
+                      "code": "already_claimed",
+                      "traceId": "27a0e423eeb2445b9ca33d2a71130cc8",
+                      "currentTriage": {
+                        "status": "ready",
+                        "priority": "high",
+                        "severity": "major",
+                        "assigneeId": "10000000-0000-4000-8000-000000000004",
+                        "nextStep": "Reproduce the crash on Windows.",
+                        "question": null,
+                        "deferralReason": null,
+                        "sourceReviewFlag": null,
+                        "enteredReviewAt": null,
+                        "updatedAt": "2026-11-25T02:15:00Z",
+                        "decisionVersion": 8
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/issueId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Claim"
+              },
+              "examples": {
+                "claimAtVersionSeven": {
+                  "value": {
+                    "commandId": "10000000-0000-4000-8000-000000000006",
+                    "expectedVersion": 7
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/issues/{issueId}/commands": {
+      "post": {
+        "operationId": "applyDecision",
+        "summary": "Apply one workspace decision",
+        "tags": [
+          "Issues"
+        ],
+        "description": "Require a connected visible source and the role, current assignment and transition specified per kind. Validate them inside the transaction. Serialize decision version, update and activity. A stale version yields 409/stale_decision and visible currentTriage. Return current triage on an authorized replay of the same committed command.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": [],
+            "antiforgeryHeader": [],
+            "antiforgeryCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Triage"
+                },
+                "examples": {
+                  "completed": {
+                    "value": {
+                      "status": "done",
+                      "priority": "high",
+                      "severity": "major",
+                      "assigneeId": "10000000-0000-4000-8000-000000000004",
+                      "nextStep": "Reproduce the crash on Windows.",
+                      "question": null,
+                      "deferralReason": null,
+                      "sourceReviewFlag": null,
+                      "enteredReviewAt": null,
+                      "updatedAt": "2026-11-25T03:10:00Z",
+                      "decisionVersion": 10
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Status403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Status409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/issueId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriageCommand"
+              },
+              "examples": {
+                "markDone": {
+                  "value": {
+                    "kind": "complete",
+                    "commandId": "10000000-0000-4000-8000-000000000008",
+                    "expectedVersion": 9
+                  }
+                },
+                "askForInformation": {
+                  "value": {
+                    "kind": "requestInformation",
+                    "commandId": "10000000-0000-4000-8000-000000000009",
+                    "expectedVersion": 2,
+                    "assigneeId": "10000000-0000-4000-8000-000000000005",
+                    "question": "Which Windows version shows the crash?"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-command-rules": {
+          "accept": "Owner/Reviewer; needsReview → ready. Priority and next step required. Optional assignment must name an active workspace member.",
+          "requestInformation": "Owner/Reviewer; needsReview → waitingForInformation. Require an active assignee and a question.",
+          "setAside": "Owner/Reviewer; needsReview → setAside. Require a reason.",
+          "returnToReview": "Owner/Reviewer; done or setAside → needsReview. Clear active assignment and reset inbox arrival time. Preserve prior values in history.",
+          "reassign": "Owner/Reviewer; ready, inProgress or waitingForInformation. Named assignee must be active. Only Ready may be unassigned.",
+          "changePriority": "Owner/Reviewer; ready or inProgress. Set a valid priority.",
+          "changeSeverity": "Owner/Reviewer; a severity value requires an applicable bug report. Null clears an existing value.",
+          "editNextStep": "Owner/Reviewer or the current assignee; ready or inProgress. Require a nonblank next step.",
+          "start": "Current assignee; ready → inProgress.",
+          "complete": "Current assignee; inProgress → done. Preserve the assignee for attribution. No external write.",
+          "answer": "Current assignee; waitingForInformation → needsReview. Preserve question and answer in history, clear assignment and reset inbox arrival time.",
+          "acknowledgeSourceChange": "Owner/Reviewer; a flag must exist. Clear a reviewed closure or reopening; transfer conflicts require confirmed identity resolution before clearing. Preserve the workflow status."
+        }
+      }
+    },
+    "/workspaces/{workspaceId}/issues/{issueId}/activity": {
+      "get": {
+        "operationId": "listIssueActivity",
+        "summary": "Read issue history",
+        "tags": [
+          "Activity"
+        ],
+        "description": "Workspace-authored history, newest first with activityId tie-breaker. Redact imported source fields for unavailable or disconnected issues. Each entry provides actor, timestamp and changes.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/issueId"
+          },
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/activity": {
+      "get": {
+        "operationId": "listActivity",
+        "summary": "Read workspace issue activity",
+        "tags": [
+          "Activity"
+        ],
+        "description": "Latest first, stable activityId tie-breaker. Enforce issue visibility, with neutral references and no source text for unavailable issues.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Status400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          },
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/pageSize"
+          },
+          {
+            "name": "repositoryId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter to one local repository."
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/reports/overview": {
+      "get": {
+        "operationId": "getOverview",
+        "summary": "Get queue counts and oldest report",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Counts use listIssues with view=needsReview and view=available. Oldest uses inbox arrival time then local ID. Empty queue returns null for both oldest fields.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ]
+      }
+    },
+    "/workspaces/{workspaceId}/reports/workload": {
+      "get": {
+        "operationId": "getWorkload",
+        "summary": "Get active workload per assignee",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Each active member maps to listIssues with view=activeWork and assigneeId. Unassigned Ready maps to view=available. Both apply the same visibility predicate as the issue list.",
+        "x-access": "Active workspace member",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                },
+                "description": "Authenticated content and tokens are private."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workload"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Status401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Status404"
+          },
+          "503": {
+            "$ref": "#/components/responses/Status503"
+          },
+          "500": {
+            "$ref": "#/components/responses/Status500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/workspaceId"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-td-session",
+        "description": "ASP.NET Core Identity host-only browser session."
+      },
+      "antiforgeryHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "Request token from GET /auth/csrf. Obtain a new one when the authenticated principal changes."
+      },
+      "antiforgeryCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-td-antiforgery",
+        "description": "Cookie paired with the antiforgery request token."
+      }
+    },
+    "schemas": {
+      "Csrf": {
+        "type": "object",
+        "properties": {
+          "requestToken": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "requestToken"
+        ]
+      },
+      "Register": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S",
+            "description": "Optional. If omitted the account receives a neutral generated display name."
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "Login": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 1,
+            "maxLength": 128,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "EmailRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "additionalProperties": false
+      },
+      "ConfirmEmail": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "userId",
+          "token"
+        ],
+        "additionalProperties": false
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "displayName",
+          "email",
+          "emailVerified",
+          "theme"
+        ]
+      },
+      "Preferences": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ]
+          }
+        },
+        "required": [
+          "theme"
+        ],
+        "additionalProperties": false
+      },
+      "Workspace": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          },
+          "myRole": {
+            "type": "string",
+            "enum": [
+              "member",
+              "reviewer",
+              "owner"
+            ]
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "myRole"
+        ]
+      },
+      "CreateWorkspace": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "member",
+              "reviewer",
+              "owner"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "displayName",
+          "role"
+        ]
+      },
+      "ChangeRole": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "member",
+              "reviewer"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "TransferOwner": {
+        "type": "object",
+        "properties": {
+          "newOwnerId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "newOwnerId"
+        ],
+        "additionalProperties": false
+      },
+      "Invitation": {
+        "type": "object",
+        "properties": {
+          "invitationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "member",
+              "reviewer"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "expired",
+              "revoked"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "invitationId",
+          "email",
+          "role",
+          "state",
+          "expiresAt"
+        ]
+      },
+      "NewInvitation": {
+        "type": "object",
+        "properties": {
+          "invitation": {
+            "$ref": "#/components/schemas/Invitation"
+          },
+          "acceptUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Shown once to the owner. Copy and share privately. Token is in the URL fragment."
+          }
+        },
+        "required": [
+          "invitation",
+          "acceptUrl"
+        ]
+      },
+      "Invite": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "member",
+              "reviewer"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "AcceptInvitation": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "additionalProperties": false
+      },
+      "InvitationPreview": {
+        "type": "object",
+        "properties": {
+          "workspaceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "\\S"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "member",
+              "reviewer"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "workspaceName",
+          "role",
+          "expiresAt"
+        ]
+      },
+      "RepositoryInput": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 140,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$",
+            "description": "GitHub owner/repository, with two valid segments. Reject dot-only segments and URLs."
+          }
+        },
+        "required": [
+          "fullName"
+        ],
+        "additionalProperties": false
+      },
+      "RepositoryPreview": {
+        "type": "object",
+        "properties": {
+          "githubRepositoryId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "description": "GitHub integer identifier serialized as decimal text."
+          },
+          "fullName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 140,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$",
+            "description": "GitHub owner/repository, with two valid segments. Reject dot-only segments and URLs."
+          },
+          "visibility": {
+            "const": "public"
+          },
+          "webUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "githubRepositoryId",
+          "fullName",
+          "visibility",
+          "webUrl"
+        ]
+      },
+      "Repository": {
+        "type": "object",
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "githubRepositoryId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "description": "GitHub integer identifier serialized as decimal text."
+          },
+          "fullName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 140,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$",
+            "description": "GitHub owner/repository, with two valid segments. Reject dot-only segments and URLs."
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "connected",
+              "disconnected"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "unavailable"
+            ]
+          },
+          "lastSuccessAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "openRunId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "repositoryId",
+          "githubRepositoryId",
+          "fullName",
+          "connection",
+          "visibility",
+          "lastSuccessAt",
+          "openRunId"
+        ]
+      },
+      "StartRun": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "runId"
+        ],
+        "additionalProperties": false
+      },
+      "AdvanceRun": {
+        "type": "object",
+        "properties": {
+          "expectedCheckpoint": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "expectedCheckpoint"
+        ],
+        "additionalProperties": false
+      },
+      "Run": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "incremental"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "paused",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "checkpoint": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "examined": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "imported": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "updated": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "lastErrorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retryAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "runId",
+          "repositoryId",
+          "mode",
+          "state",
+          "checkpoint",
+          "examined",
+          "imported",
+          "updated",
+          "lastErrorCode",
+          "retryAt",
+          "startedAt",
+          "endedAt"
+        ]
+      },
+      "SourceSummary": {
+        "type": "object",
+        "properties": {
+          "githubIssueId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "description": "GitHub integer identifier serialized as decimal text."
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "sourceUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "githubIssueId",
+          "number",
+          "title",
+          "state",
+          "labels",
+          "url",
+          "sourceUpdatedAt",
+          "observedAt"
+        ]
+      },
+      "SourceDetail": {
+        "type": "object",
+        "properties": {
+          "githubIssueId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "description": "GitHub integer identifier serialized as decimal text."
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "sourceUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceCreatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "githubIssueId",
+          "number",
+          "title",
+          "state",
+          "labels",
+          "url",
+          "sourceUpdatedAt",
+          "observedAt",
+          "body",
+          "sourceCreatedAt"
+        ]
+      },
+      "Triage": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "needsReview",
+              "ready",
+              "waitingForInformation",
+              "inProgress",
+              "done",
+              "setAside"
+            ]
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "normal",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assigneeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextStep": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deferralReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceReviewFlag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "closedWhileActive",
+                  "reopenedAfterDecision",
+                  "transferConflict"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enteredReviewAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decisionVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "status",
+          "priority",
+          "severity",
+          "assigneeId",
+          "nextStep",
+          "question",
+          "deferralReason",
+          "sourceReviewFlag",
+          "enteredReviewAt",
+          "updatedAt",
+          "decisionVersion"
+        ]
+      },
+      "IssueSummary": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceAvailability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "triage": {
+            "$ref": "#/components/schemas/Triage"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "issueId",
+          "repositoryId",
+          "sourceAvailability",
+          "source",
+          "triage"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "sourceAvailability": {
+                  "const": "unavailable"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "source": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "source": {
+                  "$ref": "#/components/schemas/SourceSummary"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "IssueDetail": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceAvailability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "triage": {
+            "$ref": "#/components/schemas/Triage"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "issueId",
+          "repositoryId",
+          "sourceAvailability",
+          "source",
+          "triage"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "sourceAvailability": {
+                  "const": "unavailable"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "source": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "source": {
+                  "$ref": "#/components/schemas/SourceDetail"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Activity": {
+        "type": "object",
+        "properties": {
+          "activityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actorKind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "system"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": [
+                    "null",
+                    "boolean",
+                    "integer",
+                    "string"
+                  ]
+                },
+                "after": {
+                  "type": [
+                    "null",
+                    "boolean",
+                    "integer",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "field",
+                "before",
+                "after"
+              ]
+            }
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "activityId",
+          "issueId",
+          "actorId",
+          "actorName",
+          "actorKind",
+          "kind",
+          "occurredAt",
+          "changes",
+          "reason"
+        ]
+      },
+      "Overview": {
+        "type": "object",
+        "properties": {
+          "needsReview": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "availableToClaim": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "oldestIssueId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oldestEnteredReviewAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "needsReview",
+          "availableToClaim",
+          "oldestIssueId",
+          "oldestEnteredReviewAt"
+        ]
+      },
+      "Workload": {
+        "type": "object",
+        "properties": {
+          "byAssignee": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "displayName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80,
+                  "pattern": "\\S"
+                },
+                "activeIssues": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 2147483647
+                }
+              },
+              "required": [
+                "userId",
+                "displayName",
+                "activeIssues"
+              ]
+            }
+          },
+          "unassignedReady": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "byAssignee",
+          "unassignedReady"
+        ]
+      },
+      "WorkspacePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Workspace"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "MemberPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "InvitationPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Invitation"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "RepositoryPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Repository"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "IssueSummaryPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueSummary"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "ActivityPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "Claim": {
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "commandId",
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
+      "Accept": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "accept"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "normal",
+              "low"
+            ]
+          },
+          "nextStep": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          },
+          "assigneeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "priority",
+          "nextStep"
+        ],
+        "additionalProperties": false
+      },
+      "RequestInformation": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "requestInformation"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "assigneeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "assigneeId",
+          "question"
+        ],
+        "additionalProperties": false
+      },
+      "SetAside": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "setAside"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "ReturnToReview": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "returnToReview"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
+      "Reassign": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "reassign"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "assigneeId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "assigneeId"
+        ],
+        "additionalProperties": false
+      },
+      "ChangePriority": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "changePriority"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "normal",
+              "low"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "priority"
+        ],
+        "additionalProperties": false
+      },
+      "ChangeSeverity": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "changeSeverity"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "severity"
+        ],
+        "additionalProperties": false
+      },
+      "EditNextStep": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "editNextStep"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "nextStep": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "nextStep"
+        ],
+        "additionalProperties": false
+      },
+      "StartWork": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "start"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
+      "CompleteWork": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "complete"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
+      "AnswerQuestion": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "answer"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "answer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion",
+          "answer"
+        ],
+        "additionalProperties": false
+      },
+      "AcknowledgeSource": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "acknowledgeSourceChange"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "kind",
+          "commandId",
+          "expectedVersion"
+        ],
+        "additionalProperties": false
+      },
+      "TriageCommand": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Accept"
+          },
+          {
+            "$ref": "#/components/schemas/RequestInformation"
+          },
+          {
+            "$ref": "#/components/schemas/SetAside"
+          },
+          {
+            "$ref": "#/components/schemas/ReturnToReview"
+          },
+          {
+            "$ref": "#/components/schemas/Reassign"
+          },
+          {
+            "$ref": "#/components/schemas/ChangePriority"
+          },
+          {
+            "$ref": "#/components/schemas/ChangeSeverity"
+          },
+          {
+            "$ref": "#/components/schemas/EditNextStep"
+          },
+          {
+            "$ref": "#/components/schemas/StartWork"
+          },
+          {
+            "$ref": "#/components/schemas/CompleteWork"
+          },
+          {
+            "$ref": "#/components/schemas/AnswerQuestion"
+          },
+          {
+            "$ref": "#/components/schemas/AcknowledgeSource"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "accept": "#/components/schemas/Accept",
+            "requestInformation": "#/components/schemas/RequestInformation",
+            "setAside": "#/components/schemas/SetAside",
+            "returnToReview": "#/components/schemas/ReturnToReview",
+            "reassign": "#/components/schemas/Reassign",
+            "changePriority": "#/components/schemas/ChangePriority",
+            "changeSeverity": "#/components/schemas/ChangeSeverity",
+            "editNextStep": "#/components/schemas/EditNextStep",
+            "start": "#/components/schemas/StartWork",
+            "complete": "#/components/schemas/CompleteWork",
+            "answer": "#/components/schemas/AnswerQuestion",
+            "acknowledgeSourceChange": "#/components/schemas/AcknowledgeSource"
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "code": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "currentTriage": {
+            "$ref": "#/components/schemas/Triage"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retryAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "traceId"
+        ]
+      },
+      "FutureIssueChanged": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decisionVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "eventId",
+          "workspaceId",
+          "issueId",
+          "decisionVersion",
+          "occurredAt"
+        ]
+      },
+      "FutureRunChanged": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "checkpoint": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "eventId",
+          "workspaceId",
+          "repositoryId",
+          "runId",
+          "checkpoint",
+          "occurredAt"
+        ]
+      }
+    },
+    "parameters": {
+      "workspaceId": {
+        "name": "workspaceId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Local resource UUID. Valid only within the authorized parent scope."
+      },
+      "issueId": {
+        "name": "issueId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Local resource UUID. Valid only within the authorized parent scope."
+      },
+      "userId": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Local resource UUID. Valid only within the authorized parent scope."
+      },
+      "invitationId": {
+        "name": "invitationId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Local resource UUID. Valid only within the authorized parent scope."
+      },
+      "repositoryId": {
+        "name": "repositoryId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Local resource UUID. Valid only within the authorized parent scope."
+      },
+      "runId": {
+        "name": "runId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Local resource UUID. Valid only within the authorized parent scope."
+      },
+      "page": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "default": 1
+        },
+        "description": "One-based. Beyond the last page returns an empty items array."
+      },
+      "pageSize": {
+        "name": "pageSize",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        },
+        "description": "Maximum number of items returned."
+      }
+    },
+    "responses": {
+      "Status400": {
+        "description": "Malformed JSON, unsupported query value or field validation failure.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status401": {
+        "description": "Missing/expired session or invalid sign-in credentials.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status403": {
+        "description": "Known member lacks permission, or antiforgery validation failed.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status404": {
+        "description": "Resource absent or outside caller’s visible workspace.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status409": {
+        "description": "Conflict with current state. See code and permitted recovery fields.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          },
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "description": "Delay in seconds when a retry time is known (e.g. rate_limited or run_busy)."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status410": {
+        "description": "Token expired or revoked after applicable identity checks.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status429": {
+        "description": "Rate limit. Respect Retry-After before retrying.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          },
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "description": "Delay in seconds when a retry time is known (e.g. rate_limited or run_busy)."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status502": {
+        "description": "GitHub returned an invalid or unsuccessful upstream response.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status503": {
+        "description": "Dependency unavailable. Retrying may succeed.",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          },
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2147483647
+            },
+            "description": "Delay in seconds when a retry time is known (e.g. rate_limited or run_busy)."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Status500": {
+        "description": "Internal Server Error",
+        "headers": {
+          "Cache-Control": {
+            "schema": {
+              "type": "string",
+              "const": "private, no-store"
+            },
+            "description": "Authenticated content and tokens are private."
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-conventions": {
+    "wire": "UTF-8 JSON, camelCase, UTC ISO 8601 timestamps, UUID local identifiers. Serialize upstream numeric GitHub IDs as positive decimal strings. Limit request properties to the documented keys. Trim names, questions and reasons, and validate identifiers and enums before domain checks.",
+    "pages": "One-based page, default pageSize 25, maximum 100. Return items, page, pageSize and total even on empty pages. Every list has a deterministic local ID tie-breaker. Workspace and member lists use name ascending; invitation and activity lists use newest first.",
+    "access": "Resolve active membership, repository and issue inside workspaceId for every operation. Use 404 for a foreign or unknown resource and 403 for insufficient privilege on a visible resource. Validate an assignee against active membership in the same workspace.",
+    "writes": "For claim and triage commands, authorize access, identify a prior committed command by workspace, issue, command ID and actor, and verify the stored input fingerprint before checking its old version. Matching retries return current authorized state without repeating effects. Reused command identity with different actor or input yields 409/command_id_reused. For a new command check current role, transition, expectedVersion and visibility; increment decisionVersion and append activity atomically. A confirmed no-op emits no duplicate activity. Ordinary upstream title changes do not increment decisionVersion.",
+    "errors": "Use application/problem+json. Stable client-facing codes include validation_failed, unauthenticated, forbidden, csrf_failed, not_found, invitation_expired, already_claimed, stale_decision, invalid_transition, command_id_reused, open_run_exists, invalid_checkpoint, run_busy, rate_limited, upstream_error, service_unavailable and internal_error. Field mistakes use 400, valid commands incompatible with current state use 409. Unexpected 500 responses are generic and include a traceId.",
+    "compatibility": "Ignore unknown response properties. Optional response fields and new routes may be added within v1. Breaking required fields, field meanings, closed enum sets or permission semantics require a new major path and a documented migration period. A public GitHub REST version is pinned independently.",
+    "visibility": "All issue lists and metric drill-downs use connected, available sources. A direct local link to a retained issue may show private history and neutral source:null for an authorized member. Never include hidden imported text or labels in problem details or history."
+  },
+  "x-github-integration": {
+    "host": "https://api.github.com",
+    "method": "GET",
+    "headers": {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2026-03-10",
+      "User-Agent": "TriageDesk"
+    },
+    "resources": [
+      "/repos/{owner}/{repo}",
+      "/repos/{owner}/{repo}/issues",
+      "/repos/{owner}/{repo}/issues/{number}"
+    ],
+    "fields": {
+      "repository": "id → githubRepositoryId (decimal text); full_name → fullName; html_url → webUrl. Verify visibility is public.",
+      "issue": "id → githubIssueId (decimal text); number, title, body and state map directly; labels[].name → labels; html_url → url; created_at and updated_at → sourceCreatedAt and sourceUpdatedAt. Set observedAt on a verified observation. Keep upstream assignees separate from internal ownership.",
+      "pullRequests": "Skip any issue-list row with a pull_request member. Use the issue number only within its verified repository."
+    },
+    "import": "Initial public open issues, sorted by creation ascending, 100 per page. Incremental GitHub state=all, sort=updated, direction=asc, since=last successful watermark minus a small overlap. Store the cutoff at start, ignore later changes for this run and advance the watermark to the cutoff only on completion. Filter pull_request rows before upsert. An unseen closed record is skipped until observed open. Recheck public visibility and known sources during manual reconciliation; a missing list row alone is insufficient evidence. Bounded reconciliation and overlapping sweeps repair pagination drift on a changing upstream list.",
+    "pagination": "Follow validated same-host REST Link rel=next. Keep upstream cursors and leases on the server. A client submits only its local checkpoint. Match previously imported rows by stable external ID or verified alias.",
+    "reconciliation": "An explicit manual refresh may include bounded open-list rescans as well as per-record rechecks. Persist the reconciliation phase and position in the run cursor so changes in upstream pagination can be repaired. No schedule or background trigger is required.",
+    "errors": "Honor Retry-After and rate-limit reset. Distinguish quota-related 403/429 from access denial. Retry transient upstream errors with bounded backoff; never interpret timeout or failed pagination as confirmed removal. Re-verify canonical issue or repository and authorized redirect targets before applying visibility or transfer effects."
+  },
+  "x-future-integrations": {
+    "status": "Deferred beyond MVP. No webhook receiver, SignalR hub or background delivery is an MVP operation.",
+    "webhooks": "Future issues deliveries: verify raw-body HMAC-SHA256, reserve X-GitHub-Delivery durably and enqueue atomically before 202. Retry duplicate already-stored IDs safely. Route by verified public repository ID to independently authorized workspace connections. Canonically fetch the public issue; reuse the import transaction and fallback reconciliation. Retry processing durably and expose terminal failures.",
+    "signalr": {
+      "workspace.issue.changed.v1": {
+        "$ref": "#/components/schemas/FutureIssueChanged"
+      },
+      "repository.refresh.changed.v1": {
+        "$ref": "#/components/schemas/FutureRunChanged"
+      },
+      "delivery": "Publish committed changes to a session-authorized workspace subscription. Revalidate active membership and revoke subscriptions on removal. An event is an invalidation hint: re-read authorized REST state, deduplicate by eventId and refetch on reconnect."
+    }
+  }
+}

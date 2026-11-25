@@ -1,0 +1,8 @@
+{
+  "name": "triage-desk-contracts",
+  "private": true,
+  "scripts": {
+    "generate": "openapi-typescript openapi/v1.json -o ../apps/web/src/lib/api-types.ts"
+  },
+  "devDependencies": { "openapi-typescript": "7.13.0", "typescript": "5.9.3" }
+}

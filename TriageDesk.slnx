@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/apps/" />
+  <Folder Name="/apps/api/">
+    <Project Path="apps/api/TriageDesk.Api/TriageDesk.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TriageDesk.Api.IntegrationTests/TriageDesk.Api.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

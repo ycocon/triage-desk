@@ -1,0 +1,64 @@
+name: Build and verify
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  slice-1:
+    runs-on: ubuntu-latest
+    env:
+      ConnectionStrings__TriageDesk: Host=127.0.0.1;Port=55432;Database=triage_desk;Username=postgres;Password=local-triage-desk
+      NEXT_TELEMETRY_DISABLED: '1'
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: triage_desk
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-triage-desk
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d triage_desk"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            contracts/package-lock.json
+      - name: Check generated transport types
+        run: |
+          npm ci --prefix contracts
+          npm run generate --prefix contracts
+          git diff --exit-code -- apps/web/src/lib/api-types.ts
+      - name: Build and verify web application
+        run: |
+          npm ci --prefix apps/web
+          npm run typecheck --prefix apps/web
+          npm run build --prefix apps/web
+      - name: Build API and apply migration
+        run: |
+          dotnet restore --locked-mode
+          dotnet tool restore
+          dotnet build --no-restore
+          dotnet ef migrations has-pending-model-changes --project apps/api/TriageDesk.Api --no-build
+          dotnet ef database update --project apps/api/TriageDesk.Api --no-build
+      - name: Verify API session behavior
+        run: dotnet test --no-build --no-restore
+      - name: Verify the private workspace journey
+        working-directory: apps/web
+        run: |
+          dotnet run --project ../../tools/LocalCertificate.csproj -- ../../.local
+          npx playwright install --with-deps chromium
+          npm run test:e2e
