@@ -1,0 +1,38 @@
+name: Publish verified API image
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: triage-desk-publish-api
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Require successful CI for this revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh run list --commit "$GITHUB_SHA" --workflow ci.yml --status success --json conclusion --jq length)
+          test "$count" -ge 1
+      - name: Publish the immutable API candidate
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build --platform linux/amd64 --build-arg "RELEASE_SHA=$GITHUB_SHA" \
+            --file apps/api/Dockerfile --tag "$image:$GITHUB_SHA" --push --metadata-file "$RUNNER_TEMP/image.json" .
+          digest=$(jq -er '."containerimage.digest"' "$RUNNER_TEMP/image.json")
+          printf 'API image `%s@%s`\n\nRevision `%s`\n' "$image" "$digest" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

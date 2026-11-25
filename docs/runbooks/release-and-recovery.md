@@ -18,6 +18,8 @@ Create the owner, migration, runtime and read-only backup identities before the 
 
 ## Release and rollback
 
+For initial hosting setup, dispatch **Publish verified API image** after CI passes for the same `main` revision. It publishes the API candidate to GHCR and records its immutable digest in the workflow summary. It does not migrate a database or deploy a service. Use that digest when preparing the first image-backed Render service, then complete the hosted release checks below before assigning public domains.
+
 1. Verify the build, API contract, database migration and critical browser matrix for the reviewed commit. Confirm the isolated database and verify the ciphertext named by a recent backup manifest.
 2. Dispatch **Rehearse an isolated release**. It builds the API, records the immutable registry digest, applies the reviewed EF migration bundle with the direct identity, and deploys that digest to Render.
 3. Check `/health/ready` and the `X-TriageDesk-Release` response header. Readiness checks the PostgreSQL version and the minimum schema migration. Do a synthetic sign-in and read an existing issue with the previous web client.
