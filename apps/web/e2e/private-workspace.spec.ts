@@ -3,10 +3,17 @@ import { resolve } from "node:path";
 import { registerAndVerify } from "./accounts";
 
 test("verified owner creates and reopens a workspace while another account is denied", async ({ page, browser }) => {
+  const signedIn = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/v1/auth/login" && response.status() === 204);
   await registerAndVerify(page, "Owner");
+  const attributes = (await (await signedIn).headerValues("set-cookie"))
+    .find(header => header.startsWith("__Host-td-session="))?.split(";").slice(1)
+    .map(attribute => attribute.trim().toLowerCase()) ?? [];
+  expect(attributes).toEqual(expect.arrayContaining(["httponly", "secure", "samesite=lax", "path=/"]));
+  expect(attributes.some(attribute => /^(domain|expires|max-age)=/.test(attribute))).toBe(false);
   const cookies = await page.context().cookies();
   expect(cookies.find(c => c.name === "__Host-td-session")).toMatchObject({
-    httpOnly: true, secure: true, sameSite: "Lax", path: "/", expires: -1,
+    httpOnly: true, secure: true, path: "/", expires: -1,
   });
 
   const noCsrf = await page.request.post("/api/v1/workspaces", { data: { name: "Rejected workspace" } });

@@ -1,22 +1,24 @@
 using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 using TriageDesk.Api.Http;
 using TriageDesk.Api.Modules.IdentityAndWorkspaces;
 using TriageDesk.Api.Modules.RepositoriesAndImport;
 using TriageDesk.Api.Modules.TriageAndActivity;
+using TriageDesk.Api.Operations;
 using TriageDesk.Api.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 var connection = builder.Configuration.GetConnectionString("TriageDesk")
     ?? throw new InvalidOperationException("Set ConnectionStrings__TriageDesk.");
-builder.Services.AddDbContext<TriageDeskDbContext>(options =>
-    options.UseNpgsql(connection, pg => pg.SetPostgresVersion(18, 0)));
-builder.Services.AddDataProtection().SetApplicationName("TriageDesk");
-if (builder.Configuration["Identity:KeyDirectory"] is { } keyDirectory)
-    builder.Services.AddDataProtection().PersistKeysToFileSystem(Directory.CreateDirectory(keyDirectory));
+var database = new NpgsqlConnectionStringBuilder(connection);
+builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(database.ConnectionString));
+builder.Services.AddDbContext<TriageDeskDbContext>((services, options) =>
+    options.UseNpgsql(services.GetRequiredService<NpgsqlDataSource>(), pg => pg.SetPostgresVersion(18, 0)));
+ReleaseOperations.Configure(builder, database);
 
 builder.Services.AddIdentityCore<Account>(options =>
 {
@@ -73,10 +75,13 @@ builder.Services.AddSingleton<AccountThrottle>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<WorkspaceAccess>();
 builder.Services.AddScoped<VerificationInbox>();
+builder.Services.AddHttpClient("verification", settings => settings.Timeout = TimeSpan.FromSeconds(8))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+builder.Services.AddSingleton<GitHubReadBudget>();
 var github = builder.Services.AddHttpClient<GitHubIssuesClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(12);
-    client.MaxResponseContentBufferSize = 4 * 1024 * 1024;
+    client.MaxResponseContentBufferSize = 12 * 1024 * 1024;
     client.DefaultRequestHeaders.UserAgent.ParseAdd("TriageDesk/1.0");
     client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
     client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
@@ -92,6 +97,7 @@ if (builder.Environment.IsDevelopment() && builder.Configuration["GitHub:Fixture
 }
 
 var app = builder.Build();
+var release = app.Services.GetRequiredService<ReleaseOperations>();
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>
@@ -99,7 +105,13 @@ app.Use(async (context, next) =>
         context.Response.Headers.CacheControl = "private, no-store";
         return Task.CompletedTask;
     });
+    var started = Stopwatch.GetTimestamp();
     await next();
+    if (release.StructuredLogs && context.Request.Path.StartsWithSegments("/api/v1"))
+        app.Logger.LogInformation("Request {Method} {Action} {Outcome} in {DurationMs} ms ({TraceId}, {Release})",
+            context.Request.Method, (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText,
+            context.Response.StatusCode, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+            Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier, release.Release);
 });
 app.UseExceptionHandler(error => error.Run(context =>
 {
@@ -111,6 +123,7 @@ app.UseExceptionHandler(error => error.Run(context =>
 app.UseStatusCodePages(context => ApiProblem.WriteStatus(context.HttpContext));
 app.UseAuthentication();
 app.UseAuthorization();
+ReleaseOperations.MapReleaseProbes(app);
 
 var api = app.MapGroup("/api/v1");
 api.AddEndpointFilter(async (invocation, next) =>
@@ -118,6 +131,8 @@ api.AddEndpointFilter(async (invocation, next) =>
     var context = invocation.HttpContext;
     if (HttpMethods.IsGet(context.Request.Method))
         return await next(invocation);
+    if (release.RecoveryMode)
+        return ApiProblem.Result(context, 503, "recovery_mode", "The workspace is temporarily read-only.");
 
     var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
     if (!context.Request.Headers.ContainsKey("X-CSRF-Token") ||
@@ -134,6 +149,8 @@ api.MapRepositories();
 api.MapImports();
 api.MapIssues();
 api.MapIssueDecisions();
+api.MapWorkspaceActivity();
+api.MapIssueReports();
 app.Run();
 
 public partial class Program;

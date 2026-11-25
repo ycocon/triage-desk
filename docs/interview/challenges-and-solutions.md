@@ -27,3 +27,15 @@ The import fixture repeats a report on page two and includes a pull request on p
 ## Two Members claim the same report
 
 The PostgreSQL test sends two claims using the same expected version and different accounts. One claim commits and receives Ready with its assignment. The other receives a conflict with the saved assignment. Replaying the winning command leaves one claim activity.
+
+## Keeping command replay compatible after adding new fields
+
+Slice 5 adds question, answer, severity, and reason fields to commands. Older receipts store a digest of the original payload shape. The digest omits the added fields when they are absent so a Slice 4 command still matches the value saved before those fields existed. The integration test seeds a receipt in the old format before replaying it through the updated API.
+
+## An issue disappears from a GitHub page
+
+Moving page boundaries and `since` filtering can both omit a valid report. The refresh checks the canonical issue URL before recording an access loss. A timeout keeps the saved snapshot available and pauses the run. Confirmed loss scrubs imported text and labels in every known affected workspace. The API checks loss records before committing in-flight observations, so an older response cannot bring back scrubbed content.
+
+## Measuring filters on a populated workspace
+
+The first bulk-seeded run showed a nested loop over millions of row combinations because PostgreSQL had stale row estimates. After `ANALYZE` on the fixture tables, PostgreSQL used a hash join for the tested queue count. The repeatable benchmark records the first request per query shape and repeated requests after fixture setup. It measures API response time with PostgreSQL statistics available.

@@ -10,7 +10,7 @@ export function testEmail(name: string) {
 }
 
 export async function registerAndVerify(page: Page, name: string,
-  email = testEmail(name), destination = "Your workspaces") {
+  email = testEmail(name), destination = "Your workspaces", checkUnverified = true) {
   await page.goto("/register");
   await page.getByLabel("Display name").fill(name);
   await page.getByLabel("Email").fill(email);
@@ -23,10 +23,12 @@ export async function registerAndVerify(page: Page, name: string,
   expect(message.to).toBe(email);
 
   await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("main").getByRole("alert")).toContainText("verify your email");
+  if (checkUnverified) {
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("verify your email");
+  }
 
   await page.goto(message.url);
   await page.getByRole("button", { name: "Confirm email", exact: true }).click();

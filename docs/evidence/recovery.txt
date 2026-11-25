@@ -1,0 +1,14 @@
+Triage Desk Slice 8 local release and recovery drill
+Previous commit 62a47d020c6dbf906fac26eee22f2673b74ed2ba
+Previous image sha256:a4b64613f2c97baf544c812631d787bb158fdd0d77bb449066e2975ccd5b2bc4
+Candidate local source stamp 6fc08619a337884816a8e50627e4902d3f9a0d5c
+Candidate image sha256:b849ddd17a96391e7f293e6e1b910807d4f0138896a090b55c15201e278cb38a
+Schema 20261125115020_IssueHandoff upgraded to 20261125155813_DurableProtectionKeys
+Candidate readiness returned 204 with the expected release stamp.
+The previous image used the runtime role to read the candidate decision and its two history entries on the upgraded schema.
+Read-only export, age encryption and decryption, SQL restore, and ciphertext and archive hashes verified.
+Old session rejected, invitation revoked, open run cancelled, member removal reconciled, and public source reverified.
+Fresh and missed-backup age gates exercised locally.
+Recovery point age 14.8 seconds (2026-11-25T16:22:07.9887220+00:00 snapshot).
+Detection to safe reviewer access 29.8 seconds.
+Hosted deployment and independent alarm delivery require isolated provider resources.

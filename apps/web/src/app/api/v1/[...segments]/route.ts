@@ -31,6 +31,7 @@ const workspaceRoutes = [
   [new RegExp(`^workspaces/${id}/issues(?:/${id})?$`, "i"), ["GET"]],
   [new RegExp(`^workspaces/${id}/issues/${id}/(?:claim|commands)$`, "i"), ["POST"]],
   [new RegExp(`^workspaces/${id}/issues/${id}/activity$`, "i"), ["GET"]],
+  [new RegExp(`^workspaces/${id}/(?:activity|reports/(?:overview|workload))$`, "i"), ["GET"]],
 ] as const;
 const cookies = new Set(["__Host-td-session", "__Host-td-csrf"]);
 const relayHeaders = ["content-type", "location", "retry-after"];

@@ -41,11 +41,16 @@ internal static class Repositories
         if (await OwnerAccess(workspaceId, context, access, ct) is { } denied) return denied;
         if (!GitHubIssuesClient.ValidName(request.FullName)) return ApiProblem.Invalid(context);
         GitHubRepository upstream;
+        var readStartedAt = clock.GetUtcNow();
         try { upstream = await github.GetRepository(request.FullName!, ct); }
         catch (GitHubFailure failure) { return failure.Result(context); }
 
         return await access.ChangeAsync(workspaceId, context, ownerOnly: true, async _ =>
         {
+            await SourceVisibility.Lock(db, ct);
+            if (await SourceVisibility.HasNewerLoss(db, upstream.Id, readStartedAt, null, null, ct))
+                return GitHubIssuesClient.Upstream().Result(context);
+
             var repo = await db.Repositories.SingleOrDefaultAsync(r =>
                 r.WorkspaceId == workspaceId && r.GitHubId == upstream.Id, ct);
             if (repo is not null)
@@ -109,26 +114,20 @@ internal static class Repositories
         WorkspaceAccess access, TriageDeskDbContext db, TimeProvider clock, CancellationToken ct) =>
         access.ChangeAsync(workspaceId, context, ownerOnly: true, async _ =>
         {
+            await SourceVisibility.Lock(db, ct);
             var repo = await db.Repositories.FindAsync([workspaceId, repositoryId], ct);
             if (repo is null) return WorkspaceAccess.Missing(context);
             if (repo.DisconnectedAt is not null) return Results.NoContent();
             var now = clock.GetUtcNow();
             repo.DisconnectedAt = now;
-            await HideSnapshots(db, repo, scrub: false, ct);
+            repo.RequiresFullScan = true;
+            await db.IssueSnapshots.Where(i => i.WorkspaceId == workspaceId && i.RepositoryId == repo.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(issue => issue.SourceAvailable, false), ct);
             var run = await db.ImportRuns.SingleOrDefaultAsync(r =>
                 r.WorkspaceId == workspaceId && r.RepositoryId == repositoryId && r.EndedAt == null, ct);
             if (run is not null) Imports.End(run, "cancelled", now);
             return Results.NoContent();
         }, ct);
-
-    internal static Task<int> HideSnapshots(TriageDeskDbContext db, RepositoryConnection repo, bool scrub, CancellationToken ct)
-    {
-        var snapshots = db.IssueSnapshots.Where(i => i.WorkspaceId == repo.WorkspaceId && i.RepositoryId == repo.Id);
-        return scrub
-            ? snapshots.ExecuteUpdateAsync(update => update.SetProperty(i => i.SourceAvailable, false)
-                .SetProperty(i => i.Title, "").SetProperty(i => i.Body, (string?)null).SetProperty(i => i.Labels, Array.Empty<string>()), ct)
-            : snapshots.ExecuteUpdateAsync(update => update.SetProperty(i => i.SourceAvailable, false), ct);
-    }
 
     internal static string Decimal(long id) => id.ToString(CultureInfo.InvariantCulture);
 

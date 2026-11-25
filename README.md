@@ -2,6 +2,12 @@
 
 A private workspace for teams that triage public GitHub issues. The current app supports verified sign-in, team management, public repository connections, manual issue refresh, and the handoff from Reviewer to Member.
 
+Read the [case study and measured evidence](docs/portfolio.md), [system and data diagrams](docs/system-and-data.md), and [API reference](docs/api-reference.md).
+
+![Workspace queues and workload](docs/images/queue-dashboard.png)
+
+![Assigned Member sees a GitHub closure](docs/images/member-closure.png)
+
 ## Local setup
 
 You need Node.js 24, the .NET 10 SDK listed in `global.json`, and PostgreSQL 18. The commands below use Docker Compose and PowerShell.
@@ -47,9 +53,17 @@ As Owner, open **Repositories**, enter `owner/repository`, preview the public re
 
 As Reviewer, accept an issue with a priority and next step. As Member, select **Available to claim**, claim the issue, then open **My work** to start it and mark it **Done**. In the Reviewer session, reload and select **All issues → Done** to see the workspace status, GitHub observation, assignee, and dated decision history.
 
+Use **Request information** to send a question to an active teammate. The assignee answers from **My work**, and the issue returns to **Needs review** with the question and answer in history. Reviewers can assign or reassign work, set it aside with a reason, return deferred or completed work to review, and adjust priority or eligible severity. A GitHub label that exactly matches `bug`, ignoring case, makes a report eligible for severity. A stale decision displays the latest saved version with the unsaved draft still visible.
+
+If a refresh tab closes, an Owner or Reviewer can select **Resume refresh** from Repositories and continue from the last saved batch. The last successful refresh updates only when the entire run succeeds. The **Source changes** inbox view shows reports that closed during active work, reopened after a workspace decision, or have conflicting transfer records.
+
+Open the workspace overview to see **Needs review**, **Available to claim**, the oldest issue in review, and each teammate's active workload. Select a count to open the issues behind it. Search the inbox by title, short repository and issue number, or full repository and issue number. The URL preserves filters, sorting, page, and the selected issue. **Activity** shows private issue history across the workspace and can be filtered by repository.
+
+When a manual refresh finds that GitHub closed an active assignment, the assignee sees an in-app notice that opens **My work** filtered to closed assignments. The notice follows the latest public observation and current assignment.
+
 ## Verify the slice
 
-Stop the manually started API and web servers before running Playwright. It starts the API, Next.js and a local GitHub fixture that serves two pages for `northline/cli`. Keep PostgreSQL running. In the terminal used for API tests, set `ConnectionStrings__TriageDesk` to the migrated local database. If you use `TRIAGEDESK_EXTERNAL_SERVERS=1`, run `node e2e/github-fixture.mjs` from `apps/web` and set `GitHub__FixtureOrigin=http://127.0.0.1:5101` on your Development API.
+Stop the manually started API and web servers before running Playwright. It starts the API, Next.js and a local GitHub fixture that serves two pages for `northline/cli` and three for `northline/refresh`. Keep PostgreSQL running. In the terminal used for API tests, set `ConnectionStrings__TriageDesk` to the migrated local database. If you use `TRIAGEDESK_EXTERNAL_SERVERS=1`, run `node e2e/github-fixture.mjs` from `apps/web` and set `GitHub__FixtureOrigin=http://127.0.0.1:5101` on your Development API.
 
 ```powershell
 dotnet test
@@ -60,7 +74,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The browser tests cover sign-in and private workspaces, team access, public issue import, and the Member-to-Reviewer handoff. The handoff uses separate authenticated browser sessions and checks for zero GitHub requests during the workflow. The PostgreSQL integration tests exercise import rollback and replay, competing claims, and returning unfinished work when the assignee leaves.
+The browser tests cover sign-in and private workspaces, team access, public issue import, the Member-to-Reviewer handoff, the question-and-answer flow with a stale edit, and refresh resumption in a separate Reviewer session. The handoff uses separate authenticated browser sessions and checks for zero GitHub requests during the workflow. PostgreSQL integration tests exercise rollback and replay, overlapping refresh requests, quota pauses, source visibility, transfers, and compatibility with earlier command receipts.
 
 ## Architecture
 
@@ -72,10 +86,14 @@ Next.js relays the API's host-only session and antiforgery cookies. The API veri
 
 Team writes lock the workspace row, check current authorization, and commit membership or invitation changes with their audit entry. The database stores invitation digests and enforces one pending invitation per normalized email in a workspace. The API hides old invitations after the retention window and purges aged rows when issuing invitations in that workspace.
 
-Manual refresh fetches one page at a time, after checking the public repository identity. Each page, new triage records, counts, and its saved checkpoint commit together. A first-seen open report enters **Needs review**. Slice 3 scans open issues. Later slices add incremental reconciliation for source changes and the full issue search and filter contract.
+Manual refresh fetches one page or up to three known issue records per batch after checking the public repository identity. The first refresh scans open issues. Later refreshes fetch all states with a five-minute overlap from the last completed run's cutoff, then recheck known records that need confirmation. Each batch and its checkpoint commit together. Confirmed loss of public access scrubs affected source copies across workspaces and preserves private triage. Verified transfers to connected repositories retain the local issue and decision history.
 
 The API serializes workspace decisions with membership changes. It checks the expected version and stores the command, decision version, and history in one transaction. A matching authorized replay returns the current triage.
 
-The full planned v1 contract is in `contracts/openapi/v1.json`. Slices 1–4 cover 35 operations, including issue claims, the initial decision commands, and per-issue history. Regenerate the web transport types with `npm ci --prefix contracts` followed by `npm run generate --prefix contracts`. The generator uses its own pinned TypeScript version. The web app builds with TypeScript 7.
+The v1 contract in `contracts/openapi/v1.json` describes 38 operations. The API integration suite compares its registered paths and methods against the contract. Regenerate the web transport types with `npm ci --prefix contracts` followed by `npm run generate --prefix contracts`. The generator uses its own pinned TypeScript version. The web app builds with TypeScript 7.
+
+The list and reports use the same PostgreSQL visibility and queue predicates. List items and totals come from one read snapshot. Set `TRIAGEDESK_FILTER_BENCHMARK` to an absolute output path before running the API suite to record the first and repeated request timings for a 5,000-issue fixture.
 
 See [the interview notes](docs/interview/project-overview.md), [request flow](docs/interview/architecture-explained.md), and [demo script](docs/interview/demo-script.md).
+
+See the [release and recovery runbook](docs/runbooks/release-and-recovery.md) for the image, readiness probes, encrypted backup, rollback and isolated restore procedure.

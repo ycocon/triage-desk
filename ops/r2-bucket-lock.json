@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "id": "protect-postgres-exports",
+      "enabled": true,
+      "prefix": "postgres/",
+      "condition": { "type": "Age", "maxAgeSeconds": 604800 }
+    }
+  ]
+}

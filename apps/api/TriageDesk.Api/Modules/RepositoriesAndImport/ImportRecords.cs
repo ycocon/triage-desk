@@ -11,6 +11,7 @@ public sealed class RepositoryConnection
     public bool Public { get; set; } = true;
     public DateTimeOffset? LastSuccessAt { get; set; }
     public DateTimeOffset? LastSuccessWatermark { get; set; }
+    public bool RequiresFullScan { get; set; }
 }
 
 public sealed class ImportRun
@@ -23,6 +24,11 @@ public sealed class ImportRun
     public string State { get; set; } = "running";
     public int Checkpoint { get; set; }
     public int NextPage { get; set; } = 1;
+    public int PageSize { get; set; } = 30;
+    public DateTimeOffset? Since { get; set; }
+    public string Phase { get; set; } = "list";
+    public Guid? RecheckAfter { get; set; }
+    public int TransientFailures { get; set; }
     public int Examined { get; set; }
     public int Imported { get; set; }
     public int Updated { get; set; }
@@ -47,7 +53,24 @@ public sealed class IssueSnapshot
     public string State { get; set; } = "open";
     public string[] Labels { get; set; } = [];
     public bool SourceAvailable { get; set; } = true;
+    public bool NeedsRecheck { get; set; }
     public DateTimeOffset SourceCreatedAt { get; set; }
     public DateTimeOffset SourceUpdatedAt { get; set; }
     public DateTimeOffset ObservedAt { get; set; }
+}
+
+public sealed class IssueExternalKey
+{
+    public Guid WorkspaceId { get; set; }
+    public long GitHubId { get; set; }
+    public Guid IssueId { get; set; }
+    public bool Current { get; set; }
+    public DateTimeOffset FirstSeenAt { get; set; }
+}
+
+public sealed class SourceAccessLoss
+{
+    public long RepositoryGitHubId { get; set; }
+    public long IssueGitHubId { get; set; } // Zero identifies a repository-level loss.
+    public DateTimeOffset DetectedAt { get; set; }
 }

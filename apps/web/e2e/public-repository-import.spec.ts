@@ -36,7 +36,7 @@ test("connects a public repository, imports paginated reports and opens issue de
       const teammate = await context.newPage();
       await teammate.goto(await link.inputValue());
       await expect(teammate.getByRole("heading", { name: "Sign in" })).toBeVisible();
-      await registerAndVerify(teammate, name, email, "Join Northline Repos");
+      await registerAndVerify(teammate, name, email, "Join Northline Repos", false);
       await teammate.getByRole("button", { name: "Accept invitation" }).click();
       await expect(teammate.getByRole("heading", { name: "Team" })).toBeVisible();
     }

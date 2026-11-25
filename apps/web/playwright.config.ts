@@ -5,6 +5,11 @@ const root = resolve(__dirname, "../..");
 const local = resolve(root, ".local");
 const address = "https://localhost:3000";
 const api = "https://127.0.0.1:5100";
+const apiConfiguration = process.env.TRIAGEDESK_RELEASE_TEST ? "Release" : "Debug";
+const browsers = [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }];
+const releaseBrowsers = [...browsers,
+  { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+  { name: "webkit", use: { ...devices["Desktop Safari"] } }];
 
 export default defineConfig({
   testDir: "./e2e",
@@ -15,7 +20,7 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   use: { baseURL: address, ignoreHTTPSErrors: true },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: process.env.TRIAGEDESK_RELEASE_TEST ? releaseBrowsers : browsers,
   webServer: process.env.TRIAGEDESK_EXTERNAL_SERVERS ? undefined : [
     {
       name: "GitHub fixture",
@@ -24,9 +29,9 @@ export default defineConfig({
     },
     {
       name: "API",
-      command: "dotnet run --no-build --no-launch-profile --project apps/api/TriageDesk.Api",
+      command: "dotnet run --no-build --no-launch-profile --configuration " + apiConfiguration + " --project apps/api/TriageDesk.Api",
       cwd: root,
-      url: api + "/api/v1/auth/csrf",
+      url: api + "/health/ready",
       ignoreHTTPSErrors: true,
       env: {
         ASPNETCORE_ENVIRONMENT: "Development",
@@ -43,11 +48,13 @@ export default defineConfig({
     },
     {
       name: "Web",
-      command: "npm run dev -- --hostname 127.0.0.1 --experimental-https --experimental-https-cert ../../.local/localhost.pem --experimental-https-key ../../.local/localhost.key --experimental-https-ca ../../.local/localhost-ca.pem",
+      command: process.env.TRIAGEDESK_RELEASE_TEST ? "node e2e/serve-built.mjs" :
+        "npm run dev -- --hostname 127.0.0.1 --experimental-https --experimental-https-cert ../../.local/localhost.pem --experimental-https-key ../../.local/localhost.key --experimental-https-ca ../../.local/localhost-ca.pem",
       url: address + "/sign-in",
       timeout: 120_000,
       ignoreHTTPSErrors: true,
-      env: { TRIAGEDESK_API_ORIGIN: api, NEXT_TELEMETRY_DISABLED: "1" },
+      env: { TRIAGEDESK_API_ORIGIN: api, NEXT_TELEMETRY_DISABLED: "1",
+        NODE_EXTRA_CA_CERTS: resolve(local, "localhost-ca.pem") },
     },
   ],
 });

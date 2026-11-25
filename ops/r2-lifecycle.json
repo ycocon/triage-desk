@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "id": "expire-postgres-exports",
+      "enabled": true,
+      "conditions": { "prefix": "postgres/" },
+      "deleteObjectsTransition": { "condition": { "type": "Age", "maxAge": 604800 } }
+    }
+  ]
+}

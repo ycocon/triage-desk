@@ -181,12 +181,36 @@ label { display: block; font-size: 14px; font-weight: 600; }
 .issue-actions { margin-block: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .issue-actions:empty { display: none; }
 .decision-form { width: 100%; display: grid; gap: 12px; justify-items: start; }
-.decision-form label:last-of-type { width: 100%; }
+.decision-form .decision-note { width: 100%; }
+.decision-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.history-note { margin-top: 6px; white-space: pre-wrap; }
 .decision-form textarea { display: block; width: 100%; margin-top: 8px; color: var(--text); background: var(--canvas); border: 1px solid var(--control); border-radius: 6px; resize: vertical; font: inherit; padding: 10px; }
 .decision-form select { margin-left: 8px; }
 .issue-history { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .issue-history ol li { padding-block: 9px; border-bottom: 1px solid var(--line); font-size: 14px; }
 .issue-history time { font-size: 12px; color: var(--muted); }
+.overview-links { margin-top: 18px; margin-bottom: 18px; }
+.queue-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.queue-metrics > * { display: grid; align-content: center; gap: 6px; min-height: 94px; padding: 12px; border: 1px solid var(--line); border-radius: 6px; }
+.queue-metrics > a, .report-rows a { color: var(--text); text-decoration: none; }
+.queue-metrics > a:hover, .report-rows a:hover { background: var(--selected); }
+.queue-metrics strong { color: var(--link); font-size: 27px; font-variant-numeric: tabular-nums; }
+.queue-metrics small { color: var(--muted); }
+.report-rows li { border-top: 1px solid var(--line); }
+.report-rows a { display: flex; justify-content: space-between; gap: 8px; padding: 12px 8px; min-height: 44px; overflow-wrap: anywhere; }
+.inbox-filter-form { display: grid; gap: 12px; margin-top: 16px; }
+.inbox-search, .activity-filter { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 10px; }
+.inbox-search label { flex: 1 1 200px; }
+.inbox-search a { padding-block: 11px; }
+.inbox-filter-form details { border: 1px solid var(--line); border-radius: 6px; }
+.inbox-filter-form summary { cursor: pointer; min-height: 44px; padding: 11px 12px; }
+.inbox-filter-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 10px; padding: 0 12px 12px; }
+.inbox-filter-controls label, .activity-filter label { display: grid; gap: 6px; font-size: 13px; }
+.inbox-filter-controls select, .activity-filter select { width: 100%; }
+.inbox-item { min-height: 44px; }
+.closure-notice { display: flex; flex-wrap: wrap; gap: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--focus); padding: 12px; margin-bottom: 18px; }
+.inbox-item .closure-label { color: var(--link); }
+.activity-issue { margin-left: auto; }
 
 @media (max-width: 740px) {
   .account-layout { display: block; }
@@ -196,7 +220,7 @@ label { display: block; font-size: 14px; font-weight: 600; }
   .workspace-layout { grid-template-columns: minmax(0,1fr); align-content: start; }
   .sidebar { padding: 12px 16px; flex-direction: row; align-items: center; justify-content: space-between; border-right: 0; border-bottom: 1px solid var(--line); gap: 12px; flex-wrap: wrap; }
   .sidebar .brand { margin-left: 0; }
-  .sidebar nav { display: none; }
+  .sidebar nav { display: flex; flex-wrap: wrap; width: 100%; order: 1; }
   .account-summary { margin: 0; }
   .topbar { padding-inline: 16px; }
   .team-invite-form, .invitation-result { grid-template-columns: minmax(0, 1fr); }
@@ -204,6 +228,8 @@ label { display: block; font-size: 14px; font-weight: 600; }
   .team-actions { margin-left: 0; }
   .inbox-grid.has-issue { grid-template-columns: minmax(0,1fr); }
   .inbox-grid.has-issue .inbox-list { display: none; }
+  .inbox-with-selection { display: none; }
+  .queue-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr)); }
   .repository-form, .repository-preview { grid-template-columns: minmax(0,1fr); }
   .repository-form > button, .repository-preview > button { justify-self: start; }
 }

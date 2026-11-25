@@ -13,7 +13,7 @@ using Xunit;
 
 namespace TriageDesk.Api.IntegrationTests;
 
-public sealed class HandoffTests
+public sealed partial class HandoffTests
 {
     [Fact]
     public async Task ClaimsSerializeAndReplaysPreserveOneHistoryEntryAndOriginalSource()

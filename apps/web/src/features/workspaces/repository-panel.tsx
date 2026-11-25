@@ -8,7 +8,7 @@ type Repository = Schema["Repository"];
 type Run = Schema["Run"];
 const stamp = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-export function RepositoryPanel({ workspace }: { workspace: Schema["Workspace"] }) {
+export function RepositoryPanel({ workspace, onIssuesChanged }: { workspace: Schema["Workspace"]; onIssuesChanged: () => void }) {
   const path = "/workspaces/" + workspace.workspaceId;
   const owner = workspace.myRole === "owner";
   const canRefresh = workspace.myRole !== "member";
@@ -20,6 +20,7 @@ export function RepositoryPanel({ workspace }: { workspace: Schema["Workspace"] 
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState<string>();
   const [run, setRun] = useState<Run>();
+  const [checkpoints, setCheckpoints] = useState<Record<string, Run>>({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const stop = useRef({ requested: false, alive: true });
@@ -33,7 +34,17 @@ export function RepositoryPanel({ workspace }: { workspace: Schema["Workspace"] 
     const controller = new AbortController();
     const view = owner ? "&connection=all" : "";
     api<Schema["RepositoryPage"]>(path + "/repositories?page=" + page + view,
-      { signal: controller.signal }).then(setRepos).catch(failure => {
+      { signal: controller.signal }).then(async result => {
+      if (controller.signal.aborted) return;
+      setRepos(result);
+      const pending = result.items.filter(repo => repo.openRunId);
+      const progress = await Promise.allSettled(pending.map(async repo =>
+        api<Run>(path + "/repositories/" + repo.repositoryId + "/sync-runs/" + repo.openRunId,
+          { signal: controller.signal })));
+      if (controller.signal.aborted) return;
+      setCheckpoints(Object.fromEntries(progress.flatMap(item =>
+        item.status === "fulfilled" ? [[item.value.repositoryId, item.value]] : [])));
+    }).catch(failure => {
       if (!controller.signal.aborted) setError(messageFor(failure));
     });
     return () => controller.abort();
@@ -73,6 +84,7 @@ export function RepositoryPanel({ workspace }: { workspace: Schema["Workspace"] 
       await api(path + "/repositories/" + repo.repositoryId, { method: "DELETE" });
       setRun(current => current?.repositoryId === repo.repositoryId ? undefined : current);
       setReload(value => value + 1);
+      onIssuesChanged();
       setNotice(repo.fullName + " disconnected.");
     });
   }
@@ -121,11 +133,12 @@ export function RepositoryPanel({ workspace }: { workspace: Schema["Workspace"] 
     } finally {
       setRefreshing(undefined);
       setReload(value => value + 1);
+      if (stop.current.alive) onIssuesChanged();
     }
   }
 
   return <>
-    <div className="list-heading"><div><h1>Repositories</h1><p className="hint">Connect public GitHub repositories and refresh their open issues.</p></div>
+    <div className="list-heading"><div><h1>Repositories</h1><p className="hint">Connect public GitHub repositories and refresh their issues.</p></div>
       <Link href={path + "/inbox"}>Open triage inbox</Link></div>
     {owner && <section className="team-section" aria-labelledby="connect-heading">
       <h2 id="connect-heading">Connect a repository</h2>
@@ -143,15 +156,20 @@ export function RepositoryPanel({ workspace }: { workspace: Schema["Workspace"] 
       <h2 id="repository-list-heading">Workspace repositories</h2>
       {!repos ? <p role="status" className="hint">Loading repositories…</p> :
         repos.items.length ? <ul className="team-rows">
-          {repos.items.map(repo => <li key={repo.repositoryId} className="team-row repository-row">
+          {repos.items.map(repo => {
+            const progress = run?.repositoryId === repo.repositoryId && (!repo.openRunId || repo.openRunId === run.runId)
+              ? run : checkpoints[repo.repositoryId];
+            const status = progress?.state === "succeeded" ? "Complete" :
+              progress?.state === "running" && refreshing !== repo.repositoryId ? "Checkpoint saved" : progress?.state;
+            return <li key={repo.repositoryId} className="team-row repository-row">
             <div className="team-person"><strong>{repo.fullName}</strong>
               <span>{repo.connection === "disconnected" ? "Disconnected" : repo.visibility === "public" ? "Public · Connected" : "Source unavailable"}</span>
               <small>{repo.lastSuccessAt ? "Last successful refresh " + stamp.format(new Date(repo.lastSuccessAt)) : "Never refreshed successfully"}</small>
-              {run?.repositoryId === repo.repositoryId ? <small role="status">
-                <span className="role">{run.state === "succeeded" ? "Complete" : run.state}</span> · {run.examined} examined · {run.imported} imported · {run.updated} updated
-                {run.lastErrorCode && (run.lastErrorCode === "source_unavailable" ? " · Source no longer available" :
-                  run.lastErrorCode === "rate_limited" ? " · GitHub rate limit" : " · GitHub request failed")}
-                {run.retryAt && " · Retry after " + stamp.format(new Date(run.retryAt))}
+              {progress ? <small role="status">
+                <span className="role">{status}</span> · {progress.examined} examined · {progress.imported} imported · {progress.updated} updated
+                {progress.lastErrorCode && (progress.lastErrorCode === "source_unavailable" ? " · Source no longer available" :
+                  progress.lastErrorCode === "rate_limited" ? " · GitHub rate limit" : " · GitHub request failed")}
+                {progress.retryAt && " · Retry after " + stamp.format(new Date(progress.retryAt))}
               </small> : repo.openRunId && <small>Refresh checkpoint saved</small>}
             </div>
             <div className="team-actions">
@@ -163,7 +181,7 @@ export function RepositoryPanel({ workspace }: { workspace: Schema["Workspace"] 
                 {owner && <button disabled={Boolean(refreshing) || busy} onClick={() => void disconnect(repo)}>Disconnect</button>}
               </> : owner && <button disabled={Boolean(refreshing) || busy} onClick={() => void connect(repo.fullName)}>Reconnect</button>}
             </div>
-          </li>)}
+          </li>; })}
         </ul> : <p className="hint">No repositories connected.</p>}
       {repos && repos.total > repos.pageSize && <nav className="pages" aria-label="Repository pages">
         <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button><span>Page {repos.page}</span>

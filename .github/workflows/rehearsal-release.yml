@@ -1,0 +1,164 @@
+name: Rehearse an isolated release
+on:
+  workflow_dispatch:
+    inputs:
+      backup_manifest:
+        description: Verified rehearsal backup manifest object key
+        required: true
+        type: string
+
+permissions:
+  contents: read
+concurrency:
+  group: triage-desk-rehearsal-release
+  cancel-in-progress: false
+
+jobs:
+  critical-browsers:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      ConnectionStrings__TriageDesk: Host=127.0.0.1;Port=55432;Database=triage_desk;Username=postgres;Password=local-triage-desk
+      NEXT_TELEMETRY_DISABLED: '1'
+      TRIAGEDESK_RELEASE_TEST: '1'
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: triage_desk
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-triage-desk
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d triage_desk"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Build the isolated production candidate
+        run: |
+          dotnet restore --locked-mode
+          dotnet tool restore
+          dotnet build --configuration Release --no-restore
+          dotnet ef database update --project apps/api/TriageDesk.Api --configuration Release --no-build
+          dotnet run --project tools/LocalCertificate.csproj -- .local
+          npm ci --prefix apps/web
+          npm run build --prefix apps/web
+      - name: Verify the critical release journeys
+        working-directory: apps/web
+        env:
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          npx playwright install --with-deps "$BROWSER"
+          npm run test:e2e -- --retries=0 --project="$BROWSER" \
+            member-handoff.spec.ts private-workspace.spec.ts queue-drilldown.spec.ts refresh-resume.spec.ts
+
+  rehearse:
+    if: github.ref == 'refs/heads/main'
+    needs: critical-browsers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: rehearsal-release
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      RELEASE_API_ORIGIN: ${{ vars.REHEARSAL_API_ORIGIN }}
+      R2_ENDPOINT: ${{ vars.REHEARSAL_R2_ENDPOINT }}
+      R2_BUCKET: ${{ vars.REHEARSAL_R2_BUCKET }}
+      AWS_DEFAULT_REGION: auto
+      MANIFEST: ${{ inputs.backup_manifest }}
+      VERCEL_ORG_ID: ${{ vars.REHEARSAL_VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.REHEARSAL_VERCEL_PROJECT_ID }}
+      VERCEL_CLI_VERSION: ${{ vars.VERCEL_CLI_VERSION }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Require completed CI for this revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh run list --commit "$GITHUB_SHA" --workflow ci.yml --status success --json conclusion --jq length)
+          test "$count" -ge 1
+      - name: Verify the independent rehearsal backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.REHEARSAL_R2_READER_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.REHEARSAL_R2_READER_SECRET }}
+        run: |
+          [[ "$MANIFEST" =~ ^postgres/[0-9]{4}-[0-9]{2}-[0-9]{2}/[A-Za-z0-9:-]+\.json$ ]]
+          [[ "$R2_ENDPOINT" =~ ^https://[a-z0-9]+\.r2\.cloudflarestorage\.com/?$ ]]
+          aws --endpoint-url "$R2_ENDPOINT" s3api get-object --bucket "$R2_BUCKET" --key "$MANIFEST" "$RUNNER_TEMP/backup.json" > /dev/null
+          bash ops/check-backup-age.sh "$(jq -er .snapshotUtc "$RUNNER_TEMP/backup.json")" 18
+          object=$(jq -er .objectKey "$RUNNER_TEMP/backup.json")
+          test "$object" = "${MANIFEST%.json}.dump.age"
+          aws --endpoint-url "$R2_ENDPOINT" s3api get-object --bucket "$R2_BUCKET" --key "$object" "$RUNNER_TEMP/backup.age" > /dev/null
+          test "$(sha256sum "$RUNNER_TEMP/backup.age" | cut -d ' ' -f 1)" = "$(jq -er .ciphertextSha256 "$RUNNER_TEMP/backup.json")"
+      - name: Build the immutable API
+        id: image
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx build --platform linux/amd64 --build-arg "RELEASE_SHA=$GITHUB_SHA" \
+            --file apps/api/Dockerfile --tag "$image:$GITHUB_SHA" --push --metadata-file "$RUNNER_TEMP/image.json" .
+          echo "reference=$image@$(jq -er '."containerimage.digest"' "$RUNNER_TEMP/image.json")" >> "$GITHUB_OUTPUT"
+      - name: Apply reviewed additive migration on the direct connection
+        env:
+          ConnectionStrings__TriageDesk: ${{ secrets.REHEARSAL_DIRECT_MIGRATION_CONNECTION }}
+        run: |
+          [[ "${ConnectionStrings__TriageDesk,,}" != *-pooler* ]]
+          [[ "${ConnectionStrings__TriageDesk,,}" == *'ssl mode=verifyfull'* || "${ConnectionStrings__TriageDesk,,}" == *'sslmode=verifyfull'* ]]
+          dotnet tool restore
+          dotnet restore --locked-mode
+          dotnet ef migrations bundle --project apps/api/TriageDesk.Api --configuration Release --output "$RUNNER_TEMP/efbundle"
+          "$RUNNER_TEMP/efbundle"
+      - name: Deploy rehearsal API and verify readiness
+        env:
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+          RENDER_DEPLOY_HOOK: ${{ secrets.REHEARSAL_RENDER_DEPLOY_HOOK }}
+        run: |
+          [[ "$RENDER_DEPLOY_HOOK" =~ ^https://api\.render\.com/deploy/srv-[a-z0-9]+\?key=[A-Za-z0-9_-]+$ ]]
+          [[ "$RELEASE_API_ORIGIN" =~ ^https://[a-z0-9-]+\.onrender\.com$ ]]
+          curl --silent --fail --get --data-urlencode "imgURL=$IMAGE_REFERENCE" "$RENDER_DEPLOY_HOOK" > /dev/null
+          headers="$RUNNER_TEMP/readiness.headers"
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail --max-time 10 -D "$headers" -o /dev/null "$RELEASE_API_ORIGIN/health/ready" &&
+              grep -Eiq "^x-triagedesk-release: $GITHUB_SHA[[:space:]]*$" "$headers"; then
+              echo "API digest `$IMAGE_REFERENCE` ready" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+      - name: Build and deploy isolated Singapore web candidate
+        working-directory: apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.REHEARSAL_VERCEL_TOKEN }}
+        run: |
+          [[ "$VERCEL_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          vc() { npx --yes "vercel@$VERCEL_CLI_VERSION" "$@" --token "$VERCEL_TOKEN"; }
+          vc pull --yes --environment=production
+          vc build --prod
+          web=$(vc deploy --prebuilt --prod --skip-domain)
+          [[ "$web" =~ ^https://[a-z0-9-]+\.vercel\.app$ ]]
+          deployment=$(curl --silent --fail --max-time 15 --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${web#https://}?teamId=$VERCEL_ORG_ID" | jq -er '.id // .uid')
+          printf 'Commit `%s`\n\nWeb candidate %s (`%s`)\n' "$GITHUB_SHA" "$web" "$deployment" >> "$GITHUB_STEP_SUMMARY"

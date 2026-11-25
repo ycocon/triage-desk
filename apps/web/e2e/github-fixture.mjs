@@ -10,6 +10,11 @@ const issue = (id, number, title, body, labels = []) => ({
 const first = issue(201, 42, "CLI crashes on Windows", "Running the CLI without a config file exits early.", ["bug", "windows"]);
 const second = issue(203, 44, "Clarify the setup instructions", "Add Windows setup steps.");
 const pullRequest = { ...issue(202, 43, "A pull request should stay out", null), pull_request: {} };
+const workload = [
+  issue(901, 42, "CLI loses a saved profile", "A saved profile is missing after restart.", ["bug"]),
+  issue(902, 44, "Document the profile format", "Describe the supported fields."),
+  issue(903, 45, "Add a profile example", "Include a sample profile."),
+];
 
 createServer((req, res) => {
   const url = new URL(req.url, "http://" + address);
@@ -25,6 +30,26 @@ createServer((req, res) => {
   reads++;
   if (url.pathname === "/repos/northline/cli") return send(200, { id: 801, full_name: "northline/cli", private: false });
   if (url.pathname === "/repos/northline/private") return send(200, { id: 802, full_name: "northline/private", private: true });
+  if (url.pathname === "/repos/northline/workload")
+    return send(200, { id: 812, full_name: "northline/workload", private: false });
+  if (url.pathname === "/repos/northline/workload/issues") {
+    if (url.searchParams.get("state") === "open") return send(200, workload);
+    if (url.searchParams.get("state") === "all")
+      return send(200, [{ ...workload[0], state: "closed", updated_at: new Date(Date.now() - 2_000).toISOString() }]);
+  }
+  if (url.pathname.startsWith("/repos/northline/workload/issues/")) {
+    const number = Number(url.pathname.split("/").at(-1));
+    const report = workload.find(item => item.number === number);
+    if (report) return send(200, { ...report, repository_url: "https://api.github.com/repos/northline/workload" });
+  }
+  if (url.pathname === "/repos/northline/refresh") return send(200, { id: 811, full_name: "northline/refresh", private: false });
+  if (url.pathname === "/repos/northline/refresh/issues" && url.searchParams.get("state") === "open") {
+    const page = Number(url.searchParams.get("page"));
+    if (page >= 1 && page <= 3) {
+      const headers = page < 3 ? { Link: `<https://api.github.com/repositories/811/issues?page=${page + 1}>; rel="next"` } : {};
+      return send(200, [issue(210 + page, page, `Refresh fixture issue ${page}`, `Details for page ${page}.`)], headers);
+    }
+  }
   if (url.pathname !== "/repos/northline/cli/issues" || url.searchParams.get("state") !== "open")
     return send(404, { message: "Not found" });
   if (url.searchParams.get("page") === "1") return send(200, [first, pullRequest], {

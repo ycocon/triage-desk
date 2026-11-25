@@ -6,14 +6,17 @@ import { Brand } from "@/features/account/brand";
 import { ApiError, api, messageFor, type Schema } from "@/lib/http";
 import { TeamPanel } from "./team-panel";
 import { RepositoryPanel } from "./repository-panel";
-import { InboxPanel, type InboxView } from "./inbox-panel";
+import { InboxPanel } from "./inbox-panel";
+import { WorkspaceOverview } from "./workspace-overview";
+import { WorkspaceActivity, type ActivityQuery } from "./workspace-activity";
+import { ClosedAssignmentsNotice } from "./closed-assignments-notice";
+import type { InboxQuery } from "./inbox-query";
 
 type Loaded = { account: Schema["User"]; page: Schema["WorkspacePage"]; workspace?: Schema["Workspace"] };
 
-export function WorkspaceShell({ workspaceId, view = "overview", issueId, inboxPage = 1,
-  inboxView = "needsReview", inboxDone = false }: {
-  workspaceId?: string; view?: "overview" | "team" | "repositories" | "inbox";
-  issueId?: string; inboxPage?: number; inboxView?: InboxView; inboxDone?: boolean;
+export function WorkspaceShell({ workspaceId, view = "overview", inboxQuery, activityQuery }: {
+  workspaceId?: string; view?: "overview" | "team" | "repositories" | "inbox" | "activity";
+  inboxQuery?: InboxQuery; activityQuery?: ActivityQuery;
 }) {
   const [loaded, setLoaded] = useState<Loaded>();
   const [page, setPage] = useState(1);
@@ -22,6 +25,8 @@ export function WorkspaceShell({ workspaceId, view = "overview", issueId, inboxP
   const [pending, setPending] = useState(false);
   const [creating, setCreating] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [issueRevision, setIssueRevision] = useState(0);
+  const issueChanged = () => setIssueRevision(value => value + 1);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -120,6 +125,9 @@ export function WorkspaceShell({ workspaceId, view = "overview", issueId, inboxP
             <Link className={view === "inbox" ? "active" : ""} aria-current={view === "inbox" ? "page" : undefined} href={workspacePath + "/inbox"}>
               <span className="nav-icon" aria-hidden="true">◎</span> Triage inbox
             </Link>
+            <Link className={view === "activity" ? "active" : ""} aria-current={view === "activity" ? "page" : undefined} href={workspacePath + "/activity"}>
+              <span className="nav-icon" aria-hidden="true">◷</span> Activity
+            </Link>
           </>}
         </nav>
         <div className="account-summary">
@@ -151,23 +159,14 @@ export function WorkspaceShell({ workspaceId, view = "overview", issueId, inboxP
             })}>Sign out</button>
           </div>
         </header>
-        <main id="content" className="workspace-content">
+        <main id="content" className="workspace-content" tabIndex={-1}>
+          {workspacePath && <ClosedAssignmentsNotice key={workspacePath} path={workspacePath} revision={issueRevision} />}
           {workspace && view === "team" ? <TeamPanel workspace={workspace} account={account} /> :
-            workspace && view === "repositories" ? <RepositoryPanel workspace={workspace} /> :
-            workspace && view === "inbox" ? <InboxPanel workspace={workspace} account={account} issueId={issueId}
-              page={inboxPage} view={inboxView} done={inboxDone} /> : workspace ? (
-            <>
-              <div className="workspace-heading"><span className="workspace-initial" aria-hidden="true">{workspace.name.slice(0, 1)}</span>
-                <div><h1>{workspace.name}</h1><p className="hint">Private workspace <span aria-hidden="true">·</span> <span className="role">{workspace.myRole}</span></p></div>
-              </div>
-              <div className="empty-state workspace-links">
-                <Link href={workspacePath + "/inbox"}>Open triage inbox</Link>
-                <Link href={workspacePath + "/repositories"}>View repositories</Link>
-                <Link href={workspacePath + "/team"}>View team</Link>
-                <Link href="/workspaces">View workspaces</Link>
-              </div>
-            </>
-          ) : (
+            workspace && view === "repositories" ? <RepositoryPanel workspace={workspace} onIssuesChanged={issueChanged} /> :
+            workspace && view === "inbox" && inboxQuery ?
+              <InboxPanel workspace={workspace} account={account} filters={inboxQuery} onIssuesChanged={issueChanged} /> :
+            workspacePath && view === "activity" && activityQuery ? <WorkspaceActivity path={workspacePath} filters={activityQuery} /> :
+            workspace ? <WorkspaceOverview workspace={workspace} /> : (
             <>
               <div className="list-heading"><div><h1>Your workspaces</h1><p className="hint">Open a workspace or create one for your team.</p></div>
                 {!creating && <button className="primary" onClick={() => setCreating(true)}>New workspace</button>}

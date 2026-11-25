@@ -13,6 +13,7 @@ internal static class ImportModel
         {
             entity.HasKey(r => new { r.WorkspaceId, r.Id });
             entity.HasIndex(r => new { r.WorkspaceId, r.GitHubId }).IsUnique();
+            entity.HasIndex(r => r.GitHubId);
             entity.HasIndex(r => new { r.WorkspaceId, r.FullName, r.Id });
             entity.Property(r => r.FullName).HasMaxLength(140);
             entity.HasOne<Workspace>().WithMany().HasForeignKey(r => r.WorkspaceId).OnDelete(DeleteBehavior.Restrict);
@@ -29,11 +30,14 @@ internal static class ImportModel
             entity.Property(r => r.Mode).HasMaxLength(11);
             entity.Property(r => r.State).HasMaxLength(10);
             entity.Property(r => r.LastErrorCode).HasMaxLength(40);
+            entity.Property(r => r.PageSize).HasDefaultValue(30);
+            entity.Property(r => r.Phase).HasMaxLength(12).HasDefaultValue("list");
         });
         model.Entity<IssueSnapshot>(entity =>
         {
             entity.HasKey(i => new { i.WorkspaceId, i.Id });
             entity.HasIndex(i => new { i.WorkspaceId, i.GitHubId }).IsUnique();
+            entity.HasIndex(i => i.GitHubId);
             entity.HasIndex(i => new { i.WorkspaceId, i.RepositoryId, i.Number });
             entity.HasOne<RepositoryConnection>().WithMany()
                 .HasForeignKey(i => new { i.WorkspaceId, Id = i.RepositoryId }).OnDelete(DeleteBehavior.Restrict);
@@ -47,6 +51,14 @@ internal static class ImportModel
             entity.HasOne<WorkspaceMember>().WithMany()
                 .HasForeignKey(t => new { t.WorkspaceId, UserId = t.AssigneeId }).OnDelete(DeleteBehavior.Restrict);
         });
+        model.Entity<IssueExternalKey>(entity =>
+        {
+            entity.HasKey(k => new { k.WorkspaceId, k.GitHubId });
+            entity.HasIndex(k => new { k.WorkspaceId, k.IssueId }).IsUnique().HasFilter(""" "Current" """);
+            entity.HasOne<IssueSnapshot>().WithMany()
+                .HasForeignKey(k => new { k.WorkspaceId, Id = k.IssueId }).OnDelete(DeleteBehavior.Restrict);
+        });
+        model.Entity<SourceAccessLoss>().HasKey(loss => new { loss.RepositoryGitHubId, loss.IssueGitHubId });
         model.Entity<IssueActivity>(entity =>
         {
             entity.HasKey(a => new { a.WorkspaceId, a.Id });

@@ -1,11 +1,13 @@
+using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using TriageDesk.Api.Http;
+using TriageDesk.Api.Operations;
 using TriageDesk.Api.Persistence;
 
 namespace TriageDesk.Api.Modules.IdentityAndWorkspaces;
 
-internal sealed class WorkspaceAccess(TriageDeskDbContext db)
+internal sealed class WorkspaceAccess(TriageDeskDbContext db, ILogger<WorkspaceAccess> logger, ReleaseOperations release)
 {
     internal static Guid Caller(HttpContext context) =>
         Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -38,8 +40,16 @@ internal sealed class WorkspaceAccess(TriageDeskDbContext db)
 
         var result = await change(workspace);
         if (result is IStatusCodeHttpResult { StatusCode: >= 400 }) return result;
+        var audit = db.ChangeTracker.Entries<TeamAuditEntry>().Where(entry => entry.State == EntityState.Added)
+            .Select(entry => entry.Entity).ToArray();
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        foreach (var entry in audit)
+            logger.LogInformation("Committed admin event {EventId} {ActionName} {OccurredAt} {WorkspaceId} {ActorId} " +
+                "{SubjectId} {InvitationId} {PreviousRole} {NextRole} {TraceId} {Release}",
+                entry.Id, entry.Action, entry.OccurredAt, entry.WorkspaceId, entry.ActorUserId, entry.SubjectUserId,
+                entry.InvitationId, entry.PreviousRole, entry.NextRole,
+                Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier, release.Release);
         return result;
     }
 

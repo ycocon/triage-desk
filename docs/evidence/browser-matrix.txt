@@ -1,0 +1,18 @@
+chromium exit code 0
+  ok 1 [chromium] › e2e\member-handoff.spec.ts:7:1 › Reviewer sees a Member complete a self-claimed issue while GitHub stays Open (17.8s)
+  ok 2 [chromium] › e2e\private-workspace.spec.ts:5:1 › verified owner creates and reopens a workspace while another account is denied (6.1s)
+  ok 3 [chromium] › e2e\queue-drilldown.spec.ts:6:1 › dashboard opens matching queues and assigned Members see GitHub closure (9.4s)
+  ok 4 [chromium] › e2e\refresh-resume.spec.ts:6:1 › a Reviewer resumes a three-page refresh after the Owner closes the tab (6.7s)
+  4 passed (49.1s)
+firefox exit code 0
+  ok 1 [firefox] › e2e\member-handoff.spec.ts:7:1 › Reviewer sees a Member complete a self-claimed issue while GitHub stays Open (35.1s)
+  ok 2 [firefox] › e2e\private-workspace.spec.ts:5:1 › verified owner creates and reopens a workspace while another account is denied (20.0s)
+  ok 3 [firefox] › e2e\queue-drilldown.spec.ts:6:1 › dashboard opens matching queues and assigned Members see GitHub closure (21.1s)
+  ok 4 [firefox] › e2e\refresh-resume.spec.ts:6:1 › a Reviewer resumes a three-page refresh after the Owner closes the tab (11.6s)
+  4 passed (1.6m)
+webkit exit code 0
+  ok 1 [webkit] › e2e\member-handoff.spec.ts:7:1 › Reviewer sees a Member complete a self-claimed issue while GitHub stays Open (59.1s)
+  ok 2 [webkit] › e2e\private-workspace.spec.ts:5:1 › verified owner creates and reopens a workspace while another account is denied (17.0s)
+  ok 3 [webkit] › e2e\queue-drilldown.spec.ts:6:1 › dashboard opens matching queues and assigned Members see GitHub closure (33.7s)
+  ok 4 [webkit] › e2e\refresh-resume.spec.ts:6:1 › a Reviewer resumes a three-page refresh after the Owner closes the tab (53.6s)
+  4 passed (2.9m)

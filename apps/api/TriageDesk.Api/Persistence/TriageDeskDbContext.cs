@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TriageDesk.Api.Modules.IdentityAndWorkspaces;
 using TriageDesk.Api.Modules.RepositoriesAndImport;
 using TriageDesk.Api.Modules.TriageAndActivity;
+using TriageDesk.Api.Operations;
 
 namespace TriageDesk.Api.Persistence;
 
@@ -16,8 +17,11 @@ public sealed class TriageDeskDbContext(DbContextOptions<TriageDeskDbContext> op
     public DbSet<RepositoryConnection> Repositories => Set<RepositoryConnection>();
     public DbSet<ImportRun> ImportRuns => Set<ImportRun>();
     public DbSet<IssueSnapshot> IssueSnapshots => Set<IssueSnapshot>();
+    public DbSet<IssueExternalKey> IssueExternalKeys => Set<IssueExternalKey>();
+    public DbSet<SourceAccessLoss> SourceAccessLosses => Set<SourceAccessLoss>();
     public DbSet<IssueTriage> IssueTriage => Set<IssueTriage>();
     public DbSet<IssueActivity> IssueActivity => Set<IssueActivity>();
+    public DbSet<ProtectionKeyRecord> ProtectionKeys => Set<ProtectionKeyRecord>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {

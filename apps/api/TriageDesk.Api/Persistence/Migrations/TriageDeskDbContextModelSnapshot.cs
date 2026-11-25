@@ -386,10 +386,28 @@ namespace TriageDesk.Api.Persistence.Migrations
                     b.Property<int>("NextPage")
                         .HasColumnType("integer");
 
+                    b.Property<int>("PageSize")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(30);
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasDefaultValue("list");
+
+                    b.Property<Guid?>("RecheckAfter")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("RepositoryId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("RetryAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("Since")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("StartedAt")
@@ -399,6 +417,9 @@ namespace TriageDesk.Api.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<int>("TransientFailures")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Updated")
                         .HasColumnType("integer");
@@ -415,6 +436,32 @@ namespace TriageDesk.Api.Persistence.Migrations
                         .HasFilter(" \"EndedAt\" IS NULL ");
 
                     b.ToTable("ImportRuns");
+                });
+
+            modelBuilder.Entity("TriageDesk.Api.Modules.RepositoriesAndImport.IssueExternalKey", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("GitHubId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("Current")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("IssueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("WorkspaceId", "GitHubId");
+
+                    b.HasIndex("WorkspaceId", "IssueId")
+                        .IsUnique()
+                        .HasFilter(" \"Current\" ");
+
+                    b.ToTable("IssueExternalKeys");
                 });
 
             modelBuilder.Entity("TriageDesk.Api.Modules.RepositoriesAndImport.IssueSnapshot", b =>
@@ -434,6 +481,9 @@ namespace TriageDesk.Api.Persistence.Migrations
                     b.PrimitiveCollection<string[]>("Labels")
                         .IsRequired()
                         .HasColumnType("text[]");
+
+                    b.Property<bool>("NeedsRecheck")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("Number")
                         .HasColumnType("integer");
@@ -462,6 +512,8 @@ namespace TriageDesk.Api.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("WorkspaceId", "Id");
+
+                    b.HasIndex("GitHubId");
 
                     b.HasIndex("WorkspaceId", "GitHubId")
                         .IsUnique();
@@ -502,7 +554,12 @@ namespace TriageDesk.Api.Persistence.Migrations
                     b.Property<bool>("Public")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("RequiresFullScan")
+                        .HasColumnType("boolean");
+
                     b.HasKey("WorkspaceId", "Id");
+
+                    b.HasIndex("GitHubId");
 
                     b.HasIndex("WorkspaceId", "GitHubId")
                         .IsUnique();
@@ -510,6 +567,22 @@ namespace TriageDesk.Api.Persistence.Migrations
                     b.HasIndex("WorkspaceId", "FullName", "Id");
 
                     b.ToTable("Repositories");
+                });
+
+            modelBuilder.Entity("TriageDesk.Api.Modules.RepositoriesAndImport.SourceAccessLoss", b =>
+                {
+                    b.Property<long>("RepositoryGitHubId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("IssueGitHubId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("DetectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("RepositoryGitHubId", "IssueGitHubId");
+
+                    b.ToTable("SourceAccessLosses");
                 });
 
             modelBuilder.Entity("TriageDesk.Api.Modules.TriageAndActivity.IssueActivity", b =>
@@ -614,6 +687,21 @@ namespace TriageDesk.Api.Persistence.Migrations
                     b.ToTable("IssueTriage");
                 });
 
+            modelBuilder.Entity("TriageDesk.Api.Operations.ProtectionKeyRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Xml")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProtectionKeys");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
                 {
                     b.HasOne("TriageDesk.Api.Modules.IdentityAndWorkspaces.Account", null)
@@ -690,6 +778,15 @@ namespace TriageDesk.Api.Persistence.Migrations
                     b.HasOne("TriageDesk.Api.Modules.RepositoriesAndImport.RepositoryConnection", null)
                         .WithMany()
                         .HasForeignKey("WorkspaceId", "RepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TriageDesk.Api.Modules.RepositoriesAndImport.IssueExternalKey", b =>
+                {
+                    b.HasOne("TriageDesk.Api.Modules.RepositoriesAndImport.IssueSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId", "IssueId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

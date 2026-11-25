@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TriageDesk.Api.Http;
 using TriageDesk.Api.Modules.IdentityAndWorkspaces;
-using TriageDesk.Api.Modules.TriageAndActivity;
 using TriageDesk.Api.Persistence;
 
 namespace TriageDesk.Api.Modules.RepositoriesAndImport;
@@ -13,7 +12,9 @@ internal sealed record RunView(Guid RunId, Guid RepositoryId, string Mode, strin
 
 internal static class Imports
 {
-    private sealed record Lease(Guid Id, long GitHubId, string FullName, int Page);
+    private static readonly TimeSpan Retention = TimeSpan.FromDays(30);
+    private sealed record Lease(Guid Id, long GitHubId, string FullName, int Page, int PageSize,
+        DateTimeOffset? Since, IReadOnlyList<RecheckTarget>? Targets, DateTimeOffset ReadStartedAt);
 
     internal static void MapImports(this RouteGroupBuilder api)
     {
@@ -30,6 +31,15 @@ internal static class Imports
         Write(workspaceId, repositoryId, context, access, db, async repo =>
         {
             if (request.RunId == Guid.Empty) return ApiProblem.Invalid(context);
+            var now = clock.GetUtcNow();
+            var cutoff = now - Retention;
+            var runs = db.ImportRuns.Where(r => r.WorkspaceId == workspaceId && r.RepositoryId == repositoryId);
+            await runs.Where(r => r.EndedAt <= cutoff).ExecuteDeleteAsync(ct);
+            await runs.Where(r => r.EndedAt == null && r.UpdatedAt <= cutoff)
+                .ExecuteUpdateAsync(update => update.SetProperty(r => r.State, "cancelled")
+                    .SetProperty(r => r.EndedAt, (DateTimeOffset?)now).SetProperty(r => r.UpdatedAt, now)
+                    .SetProperty(r => r.RetryAt, (DateTimeOffset?)null).SetProperty(r => r.LeaseId, (Guid?)null)
+                    .SetProperty(r => r.LeaseUntil, (DateTimeOffset?)null), ct);
             var prior = await db.ImportRuns.FindAsync([workspaceId, request.RunId], ct);
             if (prior is not null)
                 return prior.RepositoryId == repositoryId ? Results.Ok(View(prior)) :
@@ -42,12 +52,12 @@ internal static class Imports
                     { ["code"] = "open_run_exists", ["runId"] = existing,
                         ["traceId"] = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier });
 
-            var now = clock.GetUtcNow();
             var run = new ImportRun
             {
                 WorkspaceId = workspaceId, Id = request.RunId, RepositoryId = repositoryId,
                 InitiatorId = WorkspaceAccess.Caller(context), Mode = repo.LastSuccessAt is null ? "initial" : "incremental",
-                StartedAt = now, UpdatedAt = now
+                StartedAt = now, UpdatedAt = now, PageSize = 100,
+                Since = repo.RequiresFullScan ? null : repo.LastSuccessWatermark?.AddMinutes(-5)
             };
             db.ImportRuns.Add(run);
             return Results.Created($"/api/v1/workspaces/{workspaceId}/repositories/{repositoryId}/sync-runs/{run.Id}", View(run));
@@ -75,6 +85,11 @@ internal static class Imports
             if (run is null) return WorkspaceAccess.Missing(context);
             if (Guard(run, request, context) is { } earlier) return earlier;
             var now = clock.GetUtcNow();
+            if (run.UpdatedAt <= now - Retention)
+            {
+                End(run, "cancelled", now);
+                return Results.Ok(View(run));
+            }
             if (run.LeaseUntil > now) return Busy(context, run.LeaseUntil.Value - now);
             run.State = "paused";
             run.UpdatedAt = now;
@@ -93,9 +108,18 @@ internal static class Imports
             if (run is null) return WorkspaceAccess.Missing(context);
             if (Guard(run, request, context) is { } earlier) return earlier;
             var now = clock.GetUtcNow();
+            if (run.UpdatedAt <= now - Retention)
+            {
+                End(run, "cancelled", now);
+                return Results.Ok(View(run));
+            }
             if (run.LeaseUntil > now) return Busy(context, run.LeaseUntil.Value - now);
-            if (run.RetryAt > now) return new GitHubFailure(429, "rate_limited", run.RetryAt.Value - now).Result(context);
-            lease = new Lease(Guid.NewGuid(), repo.GitHubId, repo.FullName, run.NextPage);
+            if (run.RetryAt > now)
+                return new GitHubFailure(run.LastErrorCode == "rate_limited" ? 429 : 502,
+                    run.LastErrorCode ?? "upstream_error", run.RetryAt.Value - now).Result(context);
+            var targets = run.Phase == "recheck"
+                ? await ImportReconciliation.Targets(db, repo, run, ct) : null;
+            lease = new Lease(Guid.NewGuid(), repo.GitHubId, repo.FullName, run.NextPage, run.PageSize, run.Since, targets, now);
             run.LeaseId = lease.Id;
             run.LeaseUntil = now.AddSeconds(40);
             run.State = "running";
@@ -108,14 +132,17 @@ internal static class Imports
         GitHubFailure? failure = null;
         GitHubRepository? upstream = null;
         GitHubPage? page = null;
+        IReadOnlyList<RecheckedIssue>? rechecked = null;
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct))
         {
             deadline.CancelAfter(TimeSpan.FromSeconds(10));
             try
             {
-                upstream = await github.GetRepository(lease.FullName, deadline.Token);
-                if (upstream.Id != lease.GitHubId) throw GitHubIssuesClient.Missing();
-                page = await github.GetPage(upstream, lease.Page, deadline.Token);
+                upstream = await github.VerifyRepository(lease.FullName, lease.GitHubId, deadline.Token);
+                if (lease.Targets is null)
+                    page = await github.GetPage(upstream, lease.Page, lease.PageSize, lease.Since, deadline.Token);
+                else
+                    rechecked = await ImportReconciliation.ReadTargets(github, upstream, lease.Targets, deadline.Token);
             }
             catch (GitHubFailure ex) { failure = ex; }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { failure = GitHubIssuesClient.Upstream(); }
@@ -137,90 +164,70 @@ internal static class Imports
             ClearLease(run);
             run.UpdatedAt = now;
 
+            if (failure is null && await SourceVisibility.HasNewerLoss(db, repo.GitHubId, lease.ReadStartedAt, page, rechecked, ct))
+                failure = GitHubIssuesClient.Upstream();
+
             if (failure is not null)
             {
                 savedFailure = true;
                 run.LastErrorCode = failure.Status == 404 ? "source_unavailable" : failure.Code;
-                run.RetryAt = failure.Delay is { } delay ? now + delay : null;
                 if (failure.Status == 404)
                 {
-                    repo.Public = false;
-                    await Repositories.HideSnapshots(db, repo, scrub: true, ct);
+                    await SourceVisibility.HideRepository(db, repo, run, now, ct);
                     End(run, "failed", now);
                 }
-                else run.State = "paused";
+                else
+                {
+                    if (failure.Status != 429 && failure.Delay is null)
+                    {
+                        run.TransientFailures = Math.Min(run.TransientFailures + 1, 5);
+                        failure = new GitHubFailure(502, "upstream_error",
+                            TimeSpan.FromSeconds(1 << run.TransientFailures));
+                    }
+                    run.RetryAt = now + failure.Delay;
+                    run.State = "paused";
+                }
                 return Results.Ok(View(run));
             }
 
             repo.FullName = upstream!.FullName;
             repo.Public = true;
-            await SavePage(db, repo, run, page!, now, ct);
+            if (page is not null)
+            {
+                await ImportReconciliation.ApplyPage(db, repo, run, page, now, ct);
+                run.Examined += page.Examined;
+                if (page.NextPage is { } next) run.NextPage = next;
+                else
+                {
+                    run.Phase = "recheck";
+                    if (!await ImportReconciliation.HasTargets(db, repo, run, ct))
+                        Succeed(repo, run, now);
+                }
+            }
+            else
+            {
+                await ImportReconciliation.ApplyRechecks(db, repo, run, rechecked!, now, ct);
+                run.Examined += rechecked!.Count;
+                if (rechecked.Count > 0) run.RecheckAfter = rechecked[^1].Target.Id;
+                if (!await ImportReconciliation.HasTargets(db, repo, run, ct)) Succeed(repo, run, now);
+            }
+            run.Checkpoint++;
+            run.LastErrorCode = null;
+            run.RetryAt = null;
+            run.TransientFailures = 0;
             return Results.Ok(View(run));
-        }, ct);
+        }, ct, applySource: true);
         return savedFailure && failure is not null
             ? (failure.Status == 404 ? GitHubIssuesClient.Upstream() : failure).Result(context)
             : result;
     }
 
-    private static async Task SavePage(TriageDeskDbContext db, RepositoryConnection repo, ImportRun run,
-        GitHubPage page, DateTimeOffset now, CancellationToken ct)
+    private static void Succeed(RepositoryConnection repo, ImportRun run, DateTimeOffset now)
     {
-        var workspaceId = repo.WorkspaceId;
-        var incoming = page.Issues.GroupBy(i => i.Id).Select(group => group.MaxBy(i => i.UpdatedAt)!).ToArray();
-        var keys = incoming.Select(i => i.Id).ToArray();
-        var existing = await db.IssueSnapshots.Where(i => i.WorkspaceId == workspaceId && keys.Contains(i.GitHubId))
-            .ToDictionaryAsync(i => i.GitHubId, ct);
-
-        foreach (var issue in incoming)
-        {
-            if (!existing.TryGetValue(issue.Id, out var snapshot))
-            {
-                snapshot = new IssueSnapshot
-                {
-                    WorkspaceId = workspaceId, Id = Guid.CreateVersion7(), RepositoryId = repo.Id, GitHubId = issue.Id
-                };
-                db.IssueSnapshots.Add(snapshot);
-                db.IssueTriage.Add(new IssueTriage
-                {
-                    WorkspaceId = workspaceId, IssueId = snapshot.Id, EnteredReviewAt = now, UpdatedAt = now
-                });
-                run.Imported++;
-            }
-            else
-            {
-                // Preserve another connection's report until transfer reconciliation can verify identity.
-                if (snapshot.RepositoryId != repo.Id || issue.UpdatedAt < snapshot.SourceUpdatedAt) continue;
-                if (!snapshot.SourceAvailable || snapshot.SourceUpdatedAt < issue.UpdatedAt ||
-                    snapshot.Number != issue.Number || snapshot.Title != issue.Title || snapshot.Body != issue.Body ||
-                    snapshot.State != issue.State || !snapshot.Labels.SequenceEqual(issue.Labels))
-                    run.Updated++;
-            }
-
-            snapshot.Number = issue.Number;
-            snapshot.Title = issue.Title;
-            snapshot.Body = issue.Body;
-            snapshot.State = issue.State;
-            snapshot.Labels = issue.Labels;
-            snapshot.SourceCreatedAt = issue.CreatedAt;
-            snapshot.SourceUpdatedAt = issue.UpdatedAt;
-            snapshot.ObservedAt = now;
-            snapshot.SourceAvailable = true;
-        }
-        run.Examined += page.Examined;
-        run.Checkpoint++;
-        run.LastErrorCode = null;
-        run.RetryAt = null;
-        if (page.NextPage is { } next)
-        {
-            run.NextPage = next;
-            run.State = "running";
-        }
-        else
-        {
-            End(run, "succeeded", now);
-            repo.LastSuccessAt = now;
-            repo.LastSuccessWatermark = run.StartedAt;
-        }
+        End(run, "succeeded", now);
+        repo.LastSuccessAt = now;
+        repo.LastSuccessWatermark = run.StartedAt;
+        repo.RequiresFullScan = false;
     }
 
     private static async Task<ImportRun?> Find(TriageDeskDbContext db, Guid workspaceId, Guid repositoryId, Guid runId,
@@ -240,7 +247,7 @@ internal static class Imports
     }
 
     private static Task<IResult> Write(Guid workspaceId, Guid repositoryId, HttpContext context, WorkspaceAccess access,
-        TriageDeskDbContext db, Func<RepositoryConnection, Task<IResult>> execute, CancellationToken ct) =>
+        TriageDeskDbContext db, Func<RepositoryConnection, Task<IResult>> execute, CancellationToken ct, bool applySource = false) =>
         access.ChangeAsync(workspaceId, context, ownerOnly: false, async workspace =>
         {
             var actor = WorkspaceAccess.Caller(context);
@@ -248,6 +255,7 @@ internal static class Imports
                 m.WorkspaceId == workspaceId && m.UserId == actor && m.RemovedAt == null && m.BaseRole == "reviewer", ct))
                 return ApiProblem.Result(context, 403, "forbidden", "Only an Owner or Reviewer can refresh this repository.");
 
+            if (applySource) await SourceVisibility.Lock(db, ct);
             var repo = await db.Repositories.FindAsync([workspaceId, repositoryId], ct);
             if (repo is null) return WorkspaceAccess.Missing(context);
             if (repo.DisconnectedAt is not null)

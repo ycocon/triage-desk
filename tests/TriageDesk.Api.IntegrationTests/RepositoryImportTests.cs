@@ -14,7 +14,7 @@ using Xunit;
 
 namespace TriageDesk.Api.IntegrationTests;
 
-public sealed class RepositoryImportTests
+public sealed partial class RepositoryImportTests
 {
     [Fact]
     public async Task BatchCommitIsAtomicAndCheckpointReplayNeverRepeatsGitHubReads()
@@ -76,6 +76,10 @@ public sealed class RepositoryImportTests
         Assert.Equal("upstream_error", pending.GetProperty("lastErrorCode").GetString());
 
         github.MalformedSecond = false;
+        var attempts = github.Calls;
+        await Advance(1, HttpStatusCode.BadGateway);
+        Assert.Equal(attempts, github.Calls);
+        clock.Now += TimeSpan.FromSeconds(2);
         var success = await Advance(1, HttpStatusCode.OK);
         Assert.Equal("succeeded", success.GetProperty("state").GetString());
         Assert.Equal(4, success.GetProperty("examined").GetInt32());

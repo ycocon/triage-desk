@@ -1,0 +1,11 @@
+**
+!global.json
+!apps/
+!apps/api/
+!apps/api/TriageDesk.Api/
+!apps/api/TriageDesk.Api/**
+**/bin
+**/obj
+.git
+.local
+**/.env*

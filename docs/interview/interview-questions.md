@@ -35,3 +35,19 @@ Why save the imported issue rows and the next page checkpoint in the same transa
 ## Slice 4 knowledge check
 
 If Mark Done succeeds but the response is lost, what can the command ID tell the API that the issue version cannot?
+
+## Slice 5 knowledge check
+
+If a teammate saves a change while you are drafting a new next step, how can the app show you their saved change and keep your draft?
+
+## Slice 6 knowledge check
+
+If an issue disappears from a GitHub list page, what should the app check before hiding it?
+
+## Slice 7 knowledge check
+
+Why should the dashboard count and the list it opens use the same visibility rules?
+
+## Slice 8 knowledge check
+
+Why can restoring yesterday’s database bring back access that was revoked today?

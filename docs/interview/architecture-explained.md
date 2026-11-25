@@ -32,3 +32,20 @@ The account checks add a database read on authenticated requests. Workspace quer
 2. The API locks the workspace and rechecks active membership and source visibility. A claim requires Ready and an empty assignment. The assignee comes from the authenticated account.
 3. The API saves the assignment, advances the decision version, and appends an activity with the command ID, actor, and time in one transaction.
 4. The Member sees the work in **My work**. Start and Done check the current assignee. The Reviewer reads the saved workflow state and completion history alongside the last observed GitHub state.
+
+## Follow a question and answer
+
+A Reviewer assigns a question to an active teammate. The issue becomes Waiting for information and appears in that teammate's My work. On answer, the API verifies the assignment and accepted version inside the workspace transaction. It records the question and answer in history, clears the assignment, and resets the issue's inbox arrival time. An authorized replay can identify the recorded answer even after that assignment has cleared.
+
+## Follow an interrupted refresh
+
+1. The API saves a run cutoff and issues a short lease on the current checkpoint.
+2. It reads one GitHub page or a bounded set of canonical issue URLs outside the database transaction.
+3. It rechecks authorization, the lease, the checkpoint, and any newer access loss before saving the results and cursor together.
+4. A Reviewer can resume from the next checkpoint in a new browser session. The repository's successful cutoff changes when the run finishes.
+
+## Follow a dashboard count
+
+1. The report and inbox use the same workspace, source visibility, and queue predicates in PostgreSQL.
+2. Each dashboard link carries the corresponding queue view and, where applicable, assignee. The inbox adds any user filters and applies a stable issue ID tie-breaker.
+3. The inbox reads the total and page under one database snapshot. The URL carries the selected detail so Back restores the prior filters and page.

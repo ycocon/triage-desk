@@ -1,0 +1,50 @@
+name: Encrypted database export
+on:
+  schedule:
+    - cron: '23 4,16 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: triage-desk-backup
+  cancel-in-progress: false
+
+jobs:
+  export:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: backup
+    env:
+      PGHOST: ${{ vars.BACKUP_DIRECT_HOST }}
+      PGDATABASE: ${{ vars.BACKUP_DATABASE }}
+      PGUSER: ${{ vars.BACKUP_DATABASE_USER }}
+      AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+      R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+      R2_BUCKET: ${{ vars.R2_BUCKET }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install signed PostgreSQL 18 client and age
+        run: |
+          curl --fail --silent --show-error -o /tmp/postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          test "$(gpg --show-keys --with-colons /tmp/postgresql.asc | awk -F: '$1=="fpr" {print $10;exit}')" = B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+          sudo install -m 0644 /tmp/postgresql.asc /usr/share/keyrings/postgresql.asc
+          printf '%s\n' 'deb [signed-by=/usr/share/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/postgresql.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18 age
+      - name: Verify encrypted archive and send success heartbeat
+        env:
+          PGPASSWORD: ${{ secrets.BACKUP_DATABASE_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_WRITER_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_WRITER_SECRET }}
+          BACKUP_HEARTBEAT: ${{ secrets.BACKUP_HEARTBEAT_URL }}
+        run: PATH="/usr/lib/postgresql/18/bin:$PATH" bash ops/backup.sh
+      - name: Signal observed export failure
+        if: failure()
+        env:
+          BACKUP_HEARTBEAT: ${{ secrets.BACKUP_HEARTBEAT_URL }}
+        run: |
+          if [[ "${BACKUP_HEARTBEAT:-}" =~ ^https://hc-ping\.com/[A-Za-z0-9_-]+$ ]]; then
+            curl --silent --fail --retry 2 --max-time 15 "$BACKUP_HEARTBEAT/fail" > /dev/null
+          fi

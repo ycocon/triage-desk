@@ -1,41 +1,12 @@
-import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { resolve } from "node:path";
-import { registerAndVerify, testEmail } from "./accounts";
+import { importedWorkspace, teammate } from "./triage-fixture";
 
 test.use({ actionTimeout: 20_000, navigationTimeout: 30_000 });
 
-async function post(request: APIRequestContext, path: string, data: object, status: number) {
-  const pair = await request.get("/api/v1/auth/csrf");
-  const response = await request.post("/api/v1" + path, {
-    data, headers: { "X-CSRF-Token": (await pair.json()).requestToken },
-  });
-  expect(response.status()).toBe(status);
-  return response.json();
-}
-
-async function teammate(owner: Page, context: BrowserContext, path: string, name: string, role: string) {
-  const email = testEmail(name);
-  const invitation = await post(owner.request, path + "/invitations", { email, role }, 201);
-  const page = await context.newPage();
-  await page.goto(invitation.acceptUrl);
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await registerAndVerify(page, name, email, "Join Northline Handoff");
-  await page.getByRole("button", { name: "Accept invitation" }).click();
-  await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
-  return page;
-}
-
 test("Reviewer sees a Member complete a self-claimed issue while GitHub stays Open", async ({ page, browser, request }) => {
-  await registerAndVerify(page, "Ari");
-  const workspace = await post(page.request, "/workspaces", { name: "Northline Handoff" }, 201);
-  const path = "/workspaces/" + workspace.workspaceId;
+  const path = await importedWorkspace(page, "Northline Handoff");
   const inbox = path + "/inbox";
-  const repo = await post(page.request, path + "/repositories", { fullName: "northline/cli" }, 201);
-  const runs = path + "/repositories/" + repo.repositoryId + "/sync-runs";
-  const run = await post(page.request, runs, { runId: crypto.randomUUID() }, 201);
-  await post(page.request, runs + "/" + run.runId + "/advance", { expectedCheckpoint: 0 }, 200);
-  const completeImport = await post(page.request, runs + "/" + run.runId + "/advance", { expectedCheckpoint: 1 }, 200);
-  expect(completeImport.state).toBe("succeeded");
   const countUrl = "http://127.0.0.1:5101/counts";
   const before = await (await request.get(countUrl)).json();
 
@@ -43,8 +14,8 @@ test("Reviewer sees a Member complete a self-claimed issue while GitHub stays Op
   const reviewerSession = await browser.newContext(options);
   const memberSession = await browser.newContext(options);
   try {
-    const reviewer = await teammate(page, reviewerSession, path, "Mara", "reviewer");
-    const member = await teammate(page, memberSession, path, "Jules", "member");
+    const reviewer = await teammate(page, reviewerSession, path, "Northline Handoff", "Mara", "reviewer");
+    const member = await teammate(page, memberSession, path, "Northline Handoff", "Jules", "member");
 
     await reviewer.goto(inbox);
     await reviewer.getByRole("link", { name: /CLI crashes on Windows/ }).click();
